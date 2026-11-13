@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
+import { findMemberByBarcode } from "@/domain/attendance";
 
 export interface AttendanceState {
   records: Record<string, string>;
@@ -60,12 +61,35 @@ export function getServerAttendanceRecords(): Record<string, string> {
   return { ...state.records };
 }
 
-export function getServerAttendanceMetadata(): {
+export async function getServerAttendanceMetadata(): Promise<{
   records: Record<string, string>;
   lastResetAt: string | null;
   deletedNiks: string[];
-} {
+}> {
   const state = getActiveState();
+
+  // If Supabase is configured and not in demo mode, sync latest records from Supabase table
+  if (process.env.APP_DATA_MODE !== "demo") {
+    try {
+      const { createBackendClient } = await import("./supabase");
+      const { client, config } = createBackendClient();
+      const { data, error } = await client
+        .from("attendance_records")
+        .select("nik, attended_at")
+        .eq("event_slug", config.eventSlug);
+
+      if (!error && data && Array.isArray(data)) {
+        data.forEach((row: { nik: string; attended_at: string }) => {
+          if (row.nik && row.attended_at && !state.deletedNiks.includes(row.nik)) {
+            state.records[row.nik] = row.attended_at;
+          }
+        });
+      }
+    } catch {
+      // Graceful fallback to local memory / disk
+    }
+  }
+
   return {
     records: { ...state.records },
     lastResetAt: state.lastResetAt,
@@ -73,24 +97,66 @@ export function getServerAttendanceMetadata(): {
   };
 }
 
-export function recordServerAttendance(nik: string, timestamp?: string): Record<string, string> {
+export async function recordServerAttendance(nik: string, timestamp?: string): Promise<Record<string, string>> {
   const state = getActiveState();
+  const cleanNik = nik.trim().toUpperCase();
   const isoStr = timestamp || new Date().toISOString();
-  state.records[nik] = state.records[nik] || isoStr;
-  state.deletedNiks = state.deletedNiks.filter((n) => n !== nik);
+  state.records[cleanNik] = state.records[cleanNik] || isoStr;
+  state.deletedNiks = state.deletedNiks.filter((n) => n !== cleanNik);
   globalAttendanceStore.__sai_bumi_attendance_state = state;
   writeStateToDisk(state);
+
+  // If in Supabase mode, persist directly to PostgreSQL database
+  if (process.env.APP_DATA_MODE !== "demo") {
+    try {
+      const { createBackendClient } = await import("./supabase");
+      const { client, config } = createBackendClient();
+      const member = findMemberByBarcode(cleanNik);
+      await client
+        .from("attendance_records")
+        .upsert(
+          {
+            event_slug: config.eventSlug,
+            nik: cleanNik,
+            nama: member ? member.nama : cleanNik,
+            barcode: member ? member.barcode : cleanNik,
+            group_number: member ? member.groupNumber : null,
+            attended_at: isoStr,
+          },
+          { onConflict: "event_slug,nik" }
+        );
+    } catch {
+      // Graceful fallback to memory/disk
+    }
+  }
+
   return { ...state.records };
 }
 
-export function deleteServerAttendance(nik: string): Record<string, string> {
+export async function deleteServerAttendance(nik: string): Promise<Record<string, string>> {
   const state = getActiveState();
-  delete state.records[nik];
-  if (!state.deletedNiks.includes(nik)) {
-    state.deletedNiks.push(nik);
+  const cleanNik = nik.trim().toUpperCase();
+  delete state.records[cleanNik];
+  if (!state.deletedNiks.includes(cleanNik)) {
+    state.deletedNiks.push(cleanNik);
   }
   globalAttendanceStore.__sai_bumi_attendance_state = state;
   writeStateToDisk(state);
+
+  if (process.env.APP_DATA_MODE !== "demo") {
+    try {
+      const { createBackendClient } = await import("./supabase");
+      const { client, config } = createBackendClient();
+      await client
+        .from("attendance_records")
+        .delete()
+        .eq("event_slug", config.eventSlug)
+        .eq("nik", cleanNik);
+    } catch {
+      // Graceful fallback
+    }
+  }
+
   return { ...state.records };
 }
 
@@ -106,11 +172,11 @@ export async function resetAllServerAttendance(): Promise<Record<string, string>
   if (process.env.APP_DATA_MODE !== "demo") {
     try {
       const { createBackendClient } = await import("./supabase");
-      const { client } = createBackendClient();
+      const { client, config } = createBackendClient();
       await client
         .from("attendance_records")
         .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000");
+        .eq("event_slug", config.eventSlug);
     } catch {
       // Graceful fallback if database schema is local
     }

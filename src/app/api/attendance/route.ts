@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const meta = getServerAttendanceMetadata();
+    const meta = await getServerAttendanceMetadata();
     return NextResponse.json({
       records: meta.records,
       lastResetAt: meta.lastResetAt,
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "NIK diperlukan." }, { status: 400 });
     }
 
-    const records = recordServerAttendance(nik.trim().toUpperCase(), timestamp);
+    const records = await recordServerAttendance(nik.trim().toUpperCase(), timestamp);
     return NextResponse.json({ success: true, records });
   } catch {
     return NextResponse.json({ error: "Gagal mencatat kehadiran." }, { status: 500 });

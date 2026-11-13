@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Sesi admin tidak valid." }, { status: 401 });
   }
 
-  const meta = getServerAttendanceMetadata();
+  const meta = await getServerAttendanceMetadata();
   return NextResponse.json({
     records: meta.records,
     lastResetAt: meta.lastResetAt,
@@ -51,7 +51,7 @@ export async function DELETE(request: Request) {
     }
 
     if (body.nik) {
-      const records = deleteServerAttendance(String(body.nik).trim().toUpperCase());
+      const records = await deleteServerAttendance(String(body.nik).trim().toUpperCase());
       return NextResponse.json({ success: true, message: `Absensi ${body.nik} telah dihapus.`, records });
     }
 
