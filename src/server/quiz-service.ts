@@ -8,8 +8,10 @@ import {
   getLocalQuizSubmissions,
   getQuizStatus,
   recordLocalQuizSubmission,
+  replaceLocalQuizSubmissions,
   resetAllLocalQuizSubmissions,
   setQuizStatus,
+  syncLocalQuizStatus,
   type QuizSystemStatus,
 } from "./quiz-store";
 
@@ -104,11 +106,91 @@ export async function resetAllQuizSubmissions(): Promise<QuizSubmissionRecord[]>
 }
 
 export async function getQuizSystemStatus(): Promise<QuizSystemStatus> {
+  if (process.env.APP_DATA_MODE !== "demo") {
+    try {
+      const { client, config } = createBackendClient();
+      const { data, error } = await client.rpc("get_quiz_system_status", {
+        p_event_slug: config.eventSlug,
+      });
+
+      if (!error && data && typeof data === "object") {
+        const parsed = data as Partial<QuizSystemStatus>;
+        if (typeof parsed.isOpen === "boolean") {
+          return syncLocalQuizStatus({
+            isOpen: parsed.isOpen,
+            updatedAt: parsed.updatedAt || new Date().toISOString(),
+          });
+        }
+      }
+
+      const { data: row, error: tableError } = await client
+        .from("quiz_settings")
+        .select("is_open, updated_at")
+        .eq("event_slug", config.eventSlug)
+        .maybeSingle();
+
+      if (!tableError && row) {
+        const typedRow = row as { is_open: boolean; updated_at: string };
+        return syncLocalQuizStatus({
+          isOpen: Boolean(typedRow.is_open),
+          updatedAt: typedRow.updated_at || new Date().toISOString(),
+        });
+      }
+    } catch {
+      // Graceful fallback to local store if database/migration is unavailable
+    }
+  }
+
   return getQuizStatus();
 }
 
 export async function setQuizSystemStatus(isOpen: boolean): Promise<QuizSystemStatus> {
-  return setQuizStatus(isOpen);
+  const localUpdated = setQuizStatus(isOpen);
+
+  if (process.env.APP_DATA_MODE !== "demo") {
+    try {
+      const { client, config } = createBackendClient();
+      const { data, error } = await client.rpc("set_quiz_system_status", {
+        p_event_slug: config.eventSlug,
+        p_is_open: isOpen,
+      });
+
+      if (!error && data && typeof data === "object") {
+        const parsed = data as Partial<QuizSystemStatus>;
+        if (typeof parsed.isOpen === "boolean") {
+          return syncLocalQuizStatus({
+            isOpen: parsed.isOpen,
+            updatedAt: parsed.updatedAt || localUpdated.updatedAt,
+          });
+        }
+      }
+
+      const { data: row, error: tableError } = await client
+        .from("quiz_settings")
+        .upsert(
+          {
+            event_slug: config.eventSlug,
+            is_open: isOpen,
+            updated_at: localUpdated.updatedAt,
+          },
+          { onConflict: "event_slug" }
+        )
+        .select("is_open, updated_at")
+        .single();
+
+      if (!tableError && row) {
+        const typedRow = row as { is_open: boolean; updated_at: string };
+        return syncLocalQuizStatus({
+          isOpen: Boolean(typedRow.is_open),
+          updatedAt: typedRow.updated_at || localUpdated.updatedAt,
+        });
+      }
+    } catch {
+      // Graceful fallback to local store if database/migration is unavailable
+    }
+  }
+
+  return localUpdated;
 }
 
 export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<QuizSubmissionRecord> {
@@ -196,23 +278,19 @@ export async function getQuizSubmissionsList(): Promise<QuizSubmissionRecord[]> 
       completedAt: string;
     }>;
 
-    // Merge with any in-memory submissions
-    const local = getLocalQuizSubmissions();
-    const map = new Map<string, QuizSubmissionRecord>();
-
-    local.forEach((s) => map.set(s.participantId, s));
-    dbSubmissions.forEach((s) => {
-      map.set(s.participantId, {
+    const normalized: QuizSubmissionRecord[] = dbSubmissions
+      .map((s) => ({
         ...s,
         groupName: getGroupTitle(s.groupNumber),
+      }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (a.timeSpentSeconds !== b.timeSpentSeconds) return a.timeSpentSeconds - b.timeSpentSeconds;
+        return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
       });
-    });
 
-    return Array.from(map.values()).sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (a.timeSpentSeconds !== b.timeSpentSeconds) return a.timeSpentSeconds - b.timeSpentSeconds;
-      return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
-    });
+    replaceLocalQuizSubmissions(normalized);
+    return normalized;
   } catch {
     return getLocalQuizSubmissions();
   }
