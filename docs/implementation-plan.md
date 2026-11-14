@@ -2,7 +2,7 @@
 
 ## Keadaan akhir
 
-UI produksi membaca Supabase melalui repository HTTP/route Next.js server-only. Tiga migration sudah diterapkan pada proyek `pqasiznnfidbsasygmip` organisasi zjdev. Event asli tetap berisi 35 peserta aktif, pendaftaran terbuka, dan belum ada kelompok yang dibuat saat verifikasi ini. Tidak ada reset database, perubahan komposisi tim sembarang, atau deploy Vercel.
+UI produksi membaca Supabase melalui repository HTTP/route Next.js server-only. Seluruh migration (`20261104000001`–`20261104000007`) dan konfigurasi Vercel (`vercel.json` + `.env.example`) disiapkan agar mudah dihubungkan ke proyek Supabase dan Vercel milik sendiri.
 
 | Area | Implementasi |
 | --- | --- |
@@ -54,12 +54,6 @@ Belum diklaim: upload protokol baru lewat browser ke Supabase live, submit satu 
 
 ## Tindak lanjut operasional
 
-1. Jalankan npm run dev pada origin yang sesuai APP_ORIGIN dan uji komposisi tim nyata melalui form.
-2. Jadwalkan npm run uploads:cleanup per jam dengan secret backend, termasuk prune retensi rate counter; periksa output batch dan retry bila gagal.
-3. Siapkan deployment Vercel hanya jika diminta pengguna, isi environment production/preview terpisah dan verifikasi batas runtime di deployment aktual.
-
-## Deployment production — 5 November 2026
-
-Atas permintaan pengguna, aplikasi sudah dideploy ke https://sai-bumi-enigma.vercel.app pada proyek Vercel bedboys-projects/sai-bumi-enigma. Node runtime dipatok 22.x. Environment backend production dipasang sebagai secret melalui stdin CLI; password database, CSV peserta asli, dan .env.local tidak diunggah. Halaman publik dan snapshot HTTP 200, Cache-Control no-store; 35 peserta, 0 terdaftar, pendaftaran terbuka. Batas bukti pada bagian sebelumnya mencatat kondisi sebelum deployment; scheduler cleanup dan submit kelompok nyata masih belum diuji/dipasang.
-
-Pembaruan tampilan setelah deployment: header navigasi tetap tersedia; gambar poster besar di hero dihapus sesuai koreksi pengguna. Versi tersebut sudah dideploy ulang dan HTML production terverifikasi.
+1. Jalankan `npm run dev` pada origin yang sesuai `APP_ORIGIN` dan uji komposisi tim nyata melalui form.
+2. Jadwalkan `npm run uploads:cleanup` per jam dengan secret backend, termasuk prune retensi rate counter; periksa output batch dan retry bila gagal.
+3. Deploy ke proyek Vercel milik sendiri menggunakan `vercel.json` dan isi environment variable Supabase + `APP_ORIGIN` sesuai domain Vercel aktif.

@@ -1,6 +1,6 @@
 # THE SAI BUMI ENIGMA
 
-Aplikasi pendaftaran kelompok Pra-Raker/Raker 2026. Next.js App Router, TypeScript strict, Tailwind CSS, Zod, Supabase Postgres + Storage; target hosting Vercel. **Supabase live sudah disiapkan, 35 peserta asli sudah diimpor, dan pendaftaran sudah dibuka. Koneksi/schema/Storage serta form aktif telah diperiksa. **Production:** https://sai-bumi-enigma.vercel.app (deployment 5 November 2026).** Lihat [status setup live](docs/live-setup-status.md).
+Aplikasi pendaftaran kelompok Pra-Raker/Raker 2026. Next.js App Router, TypeScript strict, Tailwind CSS, Zod, Supabase Postgres + Storage; target hosting Vercel. Ikuti [panduan setup Supabase & Vercel](docs/supabase-setup.md) untuk menghubungkan proyek Supabase dan deployment Vercel milik Anda sendiri.
 
 ## Menjalankan
 

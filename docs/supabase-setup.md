@@ -1,6 +1,6 @@
-# Menghubungkan Supabase tanpa mengekspos akses database
+# Menghubungkan Supabase & Vercel Milik Sendiri
 
-Kode server dan migration tersedia. **Proyek baru di organisasi zjdev sudah dibuat, terhubung, menerima tiga migration dan 35 peserta asli. Pendaftaran sudah dibuka.** Lihat [status setup live](live-setup-status.md) untuk project ref, event UUID dan hasil pemeriksaan. Langkah di bawah adalah panduan setup/operasional; jangan mengulang create-event, migration atau import CSV yang sudah diterapkan. Jangan mengirim URL dengan password, database password, secret key, atau file `.env.local` melalui chat.
+Panduan ini untuk menyiapkan proyek **Supabase** baru dan menghubungkannya ke deployment **Vercel** pribadi Anda. Jangan mengirim URL dengan password, database password, secret key, atau file `.env.local` melalui chat.
 
 ## 1. Konfigurasi backend
 
@@ -29,8 +29,12 @@ Review berurutan:
 1. `supabase/migrations/20261104000001_registration_schema.sql`
 2. `supabase/migrations/20261104000002_registration_functions.sql`
 3. `supabase/migrations/20261104000003_staged_registration.sql`
+4. `supabase/migrations/20261104000004_enforce_group_quotas.sql`
+5. `supabase/migrations/20261104000005_quiz_submissions.sql`
+6. `supabase/migrations/20261104000006_attendance_records.sql`
+7. `supabase/migrations/20261104000007_quiz_status_and_admin_rpcs.sql`
 
-Ketiganya memakai transaksi, tanpa reset, drop tabel, atau seed nama peserta. Jika sudah ada tabel dengan nama yang sama, migration sengaja gagal agar benturan ditinjau; jangan menghapus tabel lama untuk memaksanya. Bucket khusus harus privat dan memiliki pengaturan yang tepat; migration akan gagal bila bucket bernama sama ternyata berbeda konfigurasi. Policy restrictive hanya menyangkal akses anon/authenticated ke bucket khusus, tanpa membuka akses ke bucket lain.
+Ketujuh migration memakai transaksi, tanpa reset, drop tabel, atau seed nama peserta. Jika sudah ada tabel dengan nama yang sama, migration sengaja gagal agar benturan ditinjau; jangan menghapus tabel lama untuk memaksanya. Bucket khusus harus privat dan memiliki pengaturan yang tepat; migration akan gagal bila bucket bernama sama ternyata berbeda konfigurasi. Policy restrictive hanya menyangkal akses anon/authenticated ke bucket khusus, tanpa membuka akses ke bucket lain.
 
 Dengan CLI Supabase yang sudah terpasang, dari root repository:
 
@@ -128,6 +132,23 @@ Untuk mengeluarkan peserta yang sudah tergabung, lakukan review panitia dan pemb
 4. Foto consumed dari kelompok dibatalkan tidak dihapus otomatis. Setelah memastikan tidak ada grup yang mereferensikan path itu, panitia menghapus file yang sesuai melalui Dashboard Storage. Tidak ada endpoint publik untuk pembatalan/deaktivasi.
 
 Pemilik database tetap bisa melakukan DDL dan menonaktifkan guard secara administratif; aplikasi tidak mengklaim dapat membatasi superuser. Akses administratif hanya untuk panitia tepercaya. Jangan mengubah grup/members/upload secara langsung untuk menghindari RPC pada operasi pendaftaran normal.
+
+## 8. Deploy ke Vercel Milik Sendiri
+
+Konfigurasi Vercel sudah tersedia di `vercel.json` (framework Next.js, region `sin1` / Singapore agar dekat dengan database Supabase Asia Tenggara, dan `engines.node = 22.x` di `package.json`).
+
+1. Push repository ke akun GitHub Anda, lalu import project baru di Dashboard Vercel (`Add New -> Project`).
+2. Di menu **Settings -> Environment Variables** pada Vercel, tambahkan variabel berikut untuk environment **Production** (dan Preview jika dipakai):
+   - `APP_DATA_MODE=supabase`
+   - `SUPABASE_URL=https://<PROJECT_REF_BARU>.supabase.co`
+   - `SUPABASE_SECRET_KEY=<sb_secret_... dari Project Settings -> API Keys>` *(atau `SUPABASE_SERVICE_ROLE_KEY`)*
+   - `SUPABASE_EVENT_SLUG=the-sai-bumi-enigma-2026`
+   - `SUPABASE_STORAGE_BUCKET=sai-bumi-team-photos`
+   - `APP_ORIGIN=https://<domain-vercel-anda>.vercel.app` *(harus sama persis dengan URL browser Production tanpa trailing slash)*
+   - `RATE_LIMIT_SECRET=<string acak minimal 32 karakter>`
+   - `UPLOAD_TOKEN_SECRET=<string acak minimal 32 karakter>`
+   - `ADMIN_PASSWORD=<password panel /admin-enigma milik Anda>`
+3. Deploy ulang (*Redeploy*) agar environment variable aktif, lalu periksa halaman utama, `/absensi`, `/quiz`, dan `/admin-enigma`.
 
 ## Referensi resmi
 
