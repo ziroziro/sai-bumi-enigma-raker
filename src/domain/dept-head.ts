@@ -33,6 +33,8 @@ export interface DeptHeadCard {
   title: string;
   roleHint: string;
   description: string;
+  power?: number;
+  defense?: number;
   silhouetteVariant: SilhouetteVariant;
   customImageUrl?: string | null;
 }
@@ -113,90 +115,108 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   {
     id: 1,
     code: "KARAKTER 1",
-    title: "Bayangan Sang Pengatur Arah",
+    title: "Sang Pengatur Arah",
     roleHint: "Strategi & Eksekusi Terukur",
     description:
-      "Sosok tenang yang membaca pola besar sebelum satu langkah pun diambil. Dikenal tegas menjaga arah misi dan menyatukan ritme seluruh tim.",
+      "Sosok tenang yang membaca pola besar sebelum satu langkah pun diambil. Tegas menjaga arah misi dan menyatukan ritme seluruh tim.",
+    power: 2800,
+    defense: 2600,
     silhouetteVariant: "fedora",
     customImageUrl: "/images/karakter/karakter-1.jpg",
   },
   {
     id: 2,
     code: "KARAKTER 2",
-    title: "Bayangan Penjaga Garis Depan",
+    title: "Penjaga Garis Depan",
     roleHint: "Aksi Cepat & Koordinasi Lapangan",
     description:
       "Selalu muncul pertama saat situasi genting membutuhkan keputusan kilat. Mengubah tekanan lapangan menjadi momentum kemenangan tim.",
+    power: 3000,
+    defense: 2400,
     silhouetteVariant: "trench",
     customImageUrl: "/images/karakter/karakter-2.jpg",
   },
   {
     id: 3,
     code: "KARAKTER 3",
-    title: "Bayangan Sang Pengamat Detail",
+    title: "Sang Pengamat Detail",
     roleHint: "Ketelitian Angka & Analisis Tajam",
     description:
       "Tidak ada celah kecil atau anomali yang luput dari radar pengamatannya. Menguji setiap bukti dengan akurasi sebelum kesimpulan diambil.",
+    power: 2500,
+    defense: 2900,
     silhouetteVariant: "monocle",
     customImageUrl: "/images/karakter/karakter-3.jpg",
   },
   {
     id: 4,
     code: "KARAKTER 4",
-    title: "Bayangan Perangkai Relasi",
+    title: "Perangkai Relasi",
     roleHint: "Komunikasi & Energi Kolaborasi",
     description:
-      "Menggerakkan moral tim lewat komunikasi yang hangat namun penuh persuasi. Mampu membuka pintu buntu hanya dengan pendekatan yang tepat.",
+      "Menggerakkan moral tim lewat komunikasi yang hangat namun penuh persuasi. Mampu membuka pintu buntu dengan pendekatan yang tepat.",
+    power: 2600,
+    defense: 2700,
     silhouetteVariant: "cloak",
     customImageUrl: "/images/karakter/karakter-4.jpg",
   },
   {
     id: 5,
     code: "KARAKTER 5",
-    title: "Bayangan Sang Arsitek Sistem",
+    title: "Sang Arsitek Sistem",
     roleHint: "Struktur Kerja & Efisiensi",
     description:
       "Melihat kekacauan sebagai teka-teki struktur yang bisa dirapikan. Menyusun alur kerja paling efisien agar energi tim tidak terbuang sia-sia.",
+    power: 2700,
+    defense: 2800,
     silhouetteVariant: "architect",
     customImageUrl: "/images/karakter/karakter-5.jpg",
   },
   {
     id: 6,
     code: "KARAKTER 6",
-    title: "Bayangan Ahli Taktik Senyap",
+    title: "Ahli Taktik Senyap",
     roleHint: "Perencanaan Cadangan & Risiko",
     description:
       "Selalu menyiapkan rencana B dan C sebelum orang lain menyadari ada ancaman. Tenang di balik layar, menentukan di momen penentu.",
+    power: 2900,
+    defense: 2600,
     silhouetteVariant: "strategist",
     customImageUrl: "/images/karakter/karakter-6.jpg",
   },
   {
     id: 7,
     code: "KARAKTER 7",
-    title: "Bayangan Penjaga Standar",
+    title: "Penjaga Standar",
     roleHint: "Disiplin & Kualitas Hasil",
     description:
       "Memegang teguh standar tertinggi dalam setiap eksekusi. Menjadi jangkar keandalan ketika tim harus mempertahankan konsistensi hingga garis akhir.",
+    power: 2400,
+    defense: 3100,
     silhouetteVariant: "sentinel",
     customImageUrl: "/images/karakter/karakter-7.jpg",
   },
   {
     id: 8,
     code: "KARAKTER 8",
-    title: "Bayangan Pengurai Sandi",
+    title: "Pengurai Sandi",
     roleHint: "Inovasi & Pemecahan Masalah",
     description:
       "Terbiasa memecahkan kode rumit dengan sudut pandang yang tidak terduga. Menghadirkan ide segar ketika pola lama tidak lagi menjawab tantangan.",
+    power: 2850,
+    defense: 2550,
     silhouetteVariant: "scholar",
     customImageUrl: "/images/karakter/karakter-8.jpg",
   },
   {
     id: 9,
     code: "KARAKTER 9",
-    title: "Bayangan Komandan Enigma",
+    title: "Komandan Enigma",
     roleHint: "Penggerak Visi & Penentu Akhir",
     description:
       "Sosok karismatik dengan intuisi tajam membaca peluang tersembunyi. Mendorong tim keluar dari batas nyaman untuk menaklukkan misi tersulit.",
+    power: 3100,
+    defense: 2700,
     silhouetteVariant: "enigma",
     customImageUrl: "/images/karakter/karakter-9.jpg",
   },
@@ -210,6 +230,12 @@ function normalizeCardCode(rawCode: string | undefined, fallback: string): strin
     return `KARAKTER ${legacyMatch[1]}`;
   }
   return trimmed;
+}
+
+function normalizeCardTitle(rawTitle: string | undefined, fallback: string): string {
+  const trimmed = rawTitle?.trim();
+  if (!trimmed) return fallback;
+  return trimmed.replace(/^Bayangan\s+/i, "");
 }
 
 export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptHeadCard[] {
@@ -226,9 +252,11 @@ export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptH
     return {
       id: base.id,
       code: normalizeCardCode(override.code, base.code),
-      title: override.title?.trim() || base.title,
+      title: normalizeCardTitle(override.title, base.title),
       roleHint: override.roleHint?.trim() || base.roleHint,
       description: override.description?.trim() || base.description,
+      power: typeof override.power === "number" ? override.power : base.power,
+      defense: typeof override.defense === "number" ? override.defense : base.defense,
       silhouetteVariant:
         override.silhouetteVariant && SILHOUETTE_VARIANTS.includes(override.silhouetteVariant)
           ? override.silhouetteVariant

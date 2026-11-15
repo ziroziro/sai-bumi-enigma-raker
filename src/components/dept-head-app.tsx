@@ -430,8 +430,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
                   isOwnedByCurrentGroup ? "is-owned" : ""
                 } ${isTakenByOther ? "is-taken" : ""}`}
               >
-                <div className="silhouette-card-header">
-                  <span className="silhouette-code">{card.code}</span>
+                <div className="tcg-card-topbar">
+                  <h3 className="tcg-card-name">{card.title}</h3>
                   {isOwnedByCurrentGroup ? (
                     <span className="silhouette-status-pill is-owned">
                       <Icon name="check" size={13} /> Pilihan Tim Anda
@@ -449,16 +449,32 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
                   )}
                 </div>
 
+                <div className="tcg-stars-row" aria-label="Bintang 5">
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                </div>
+
                 <SilhouetteArt
                   variant={card.silhouetteVariant}
                   customImageUrl={card.customImageUrl}
                   alt={`${card.code} - ${card.title}`}
                 />
 
-                <div className="silhouette-card-body">
-                  <h3 className="silhouette-title">{card.title}</h3>
-                  <span className="silhouette-role-hint">{card.roleHint}</span>
-                  <p className="silhouette-desc">{card.description}</p>
+                <div className="tcg-meta-row">
+                  <span className="tcg-edition">ENIGMA · 2027</span>
+                  <span className="silhouette-code">{card.code}</span>
+                </div>
+
+                <div className="tcg-lore-box">
+                  <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
+                  <p className="tcg-desc">{card.description}</p>
+                  <div className="tcg-stats-row">
+                    <span>PWR / {card.power}</span>
+                    <span>DEF / {card.defense}</span>
+                  </div>
                 </div>
               </button>
             );

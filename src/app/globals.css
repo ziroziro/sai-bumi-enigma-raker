@@ -5953,5 +5953,90 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
   }
 }
 
+/* TCG / Character Card Layout */
+.tcg-card-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid #59432d;
+  background: linear-gradient(90deg, #241b15, #171213);
+}
+
+.tcg-card-name {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.15;
+  color: var(--color-cream);
+  font-weight: 600;
+}
+
+.tcg-stars-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: #f0c05a;
+  letter-spacing: 0.05em;
+  padding: 0 2px;
+}
+
+.tcg-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.tcg-edition {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.tcg-lore-box {
+  border: 1px solid #59432d;
+  background: #120f10;
+  padding: 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.tcg-ability-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+}
+
+.tcg-desc {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+  flex: 1;
+}
+
+.tcg-stats-row {
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid #3c2f24;
+  display: flex;
+  justify-content: flex-end;
+  gap: 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-cream);
+  font-variant-numeric: tabular-nums;
+}
+
+
 
 
