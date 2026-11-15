@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { SilhouetteArt } from "@/components/silhouette-art";
 import { formatRegistrationTime } from "@/config/event";
-import type { DeptHeadCard, PublicDeptHeadSnapshot } from "@/domain/dept-head";
+import {
+  DEPT_HEAD_ANNOUNCEMENT_LABEL,
+  type DeptHeadCard,
+  type LockedDeptHeadView,
+  type PublicDeptHeadSnapshot,
+} from "@/domain/dept-head";
 
 interface DeptHeadAppProps {
   initialSnapshot: PublicDeptHeadSnapshot | null;
@@ -12,6 +17,9 @@ interface DeptHeadAppProps {
 
 export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
   const [snapshot, setSnapshot] = useState<PublicDeptHeadSnapshot | null>(initialSnapshot);
+  const [lockedView, setLockedView] = useState<LockedDeptHeadView | null>(null);
+  const [postSubmitNotice, setPostSubmitNotice] = useState<string | null>(null);
+
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
@@ -21,7 +29,6 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const cardById = useMemo(() => {
     const map = new Map<number, DeptHeadCard>();
@@ -84,6 +91,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     e.preventDefault();
     setLoggingIn(true);
     setLoginError(null);
+    setPostSubmitNotice(null);
 
     try {
       const response = await fetch("/api/dept-head/login", {
@@ -98,18 +106,33 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
       const payload = (await response.json()) as {
         error?: string;
+        alreadySubmitted?: boolean;
+        lockedView?: LockedDeptHeadView;
         snapshot?: PublicDeptHeadSnapshot;
       };
 
-      if (!response.ok || !payload.snapshot) {
+      if (!response.ok) {
         setLoginError(payload.error || "Email atau password akun kelompok tidak valid.");
         return;
       }
 
+      if (payload.alreadySubmitted && payload.lockedView) {
+        setSnapshot(null);
+        setLockedView(payload.lockedView);
+        setSelectedCardIds([]);
+        setPasswordInput("");
+        return;
+      }
+
+      if (!payload.snapshot) {
+        setLoginError("Gagal memuat data pemilihan karakter kelompok.");
+        return;
+      }
+
+      setLockedView(null);
       setSnapshot(payload.snapshot);
       setSelectedCardIds([]);
       setErrorMessage(null);
-      setSuccessMessage(null);
       setPasswordInput("");
     } catch {
       setLoginError("Gagal menghubungi server untuk masuk ke akun kelompok.");
@@ -128,9 +151,9 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
       // ignore
     }
     setSnapshot(null);
+    setLockedView(null);
     setSelectedCardIds([]);
     setErrorMessage(null);
-    setSuccessMessage(null);
   }
 
   function handleToggleCard(cardId: number) {
@@ -139,7 +162,6 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     if (takenByOtherSet.has(cardId)) return;
 
     setErrorMessage(null);
-    setSuccessMessage(null);
 
     const requiredCount = snapshot.requiredCount;
     setSelectedCardIds((prev) => {
@@ -172,7 +194,6 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
     setSubmitting(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
 
     try {
       const response = await fetch("/api/dept-head", {
@@ -186,7 +207,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
       const payload = (await response.json()) as {
         error?: string;
-        snapshot?: PublicDeptHeadSnapshot;
+        loggedOut?: boolean;
+        message?: string;
       };
 
       if (response.status === 401) {
@@ -201,14 +223,16 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
         return;
       }
 
-      if (payload.snapshot) {
-        setSnapshot(payload.snapshot);
-      } else {
-        await refreshSnapshot();
-      }
+      // Otomatis logout setelah berhasil submit pilihan karakter Dept Head
+      const submittedGroupTitle = snapshot.group.title;
+      setSnapshot(null);
+      setLockedView(null);
       setSelectedCardIds([]);
-      setSuccessMessage(
-        `Pilihan karakter untuk ${snapshot.group.title} berhasil dikunci ke database!`
+      setEmailInput("");
+      setPasswordInput("");
+      setLoginError(null);
+      setPostSubmitNotice(
+        `Pilihan karakter untuk ${submittedGroupTitle} berhasil dikunci dan akun otomatis keluar. ${DEPT_HEAD_ANNOUNCEMENT_LABEL}`
       );
     } catch {
       setErrorMessage("Terjadi kesalahan jaringan. Silakan muat ulang status lalu coba kembali.");
@@ -217,6 +241,106 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     }
   }
 
+  // TAMPILAN KHUSUS JIKA AKUN SUDAH PERNAH SUBMIT & MENCOBA LOGIN LAGI
+  if (lockedView) {
+    return (
+      <div className="page-shell dept-head-shell">
+        <section className="panel dept-head-hero">
+          <div className="dept-head-hero-head">
+            <div>
+              <span className="eyebrow">
+                <Icon name="lock" size={14} /> AKUN TERKUNCI · {lockedView.group.title.toUpperCase()}
+              </span>
+              <h1 className="dept-head-title">Pilihan Dept Head Telah Terkunci</h1>
+              <p className="dept-head-subtitle">
+                Akun <strong>{lockedView.group.title}</strong> sudah mengirimkan pilihan pada{" "}
+                {formatRegistrationTime(lockedView.submittedAt)} dan{" "}
+                <strong>tidak dapat login ulang untuk mengubah pilihan</strong>. Di bawah ini adalah
+                kartu karakter yang telah dipilih oleh tim Anda.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-refresh-dept-head"
+              onClick={() => {
+                setLockedView(null);
+                setEmailInput("");
+                setPasswordInput("");
+              }}
+            >
+              <Icon name="arrowLeft" size={16} />
+              <span>Kembali ke Login</span>
+            </button>
+          </div>
+
+          <div className="announcement-banner" role="status">
+            <Icon name="calendar" size={20} />
+            <div>
+              <strong>Informasi Pengumuman Department Head</strong>
+              <p>{lockedView.announcementDateLabel}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel dept-head-step-panel">
+          <div className="dept-step-header">
+            <span className="step-pill">KARTU TERPILIH</span>
+            <div className="dept-step-title-wrap">
+              <h2 className="dept-step-heading">
+                Kartu Dept Head Terpilih — {lockedView.group.title}
+              </h2>
+              <p className="section-caption is-confirmed-text">
+                Halaman ini hanya menampilkan karakter yang telah resmi Anda kunci ({lockedView.selectedCards.length} kartu).
+              </p>
+            </div>
+          </div>
+
+          <div className="locked-dept-head-grid">
+            {lockedView.selectedCards.map((card) => (
+              <div key={card.id} className="silhouette-card is-owned is-readonly">
+                <div className="tcg-card-topbar">
+                  <h3 className="tcg-card-name">{card.title}</h3>
+                  <span className="silhouette-status-pill is-owned">
+                    <Icon name="check" size={13} /> Pilihan Tim Anda
+                  </span>
+                </div>
+
+                <div className="tcg-stars-row" aria-label="Bintang 5">
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                  <span>★</span>
+                </div>
+
+                <SilhouetteArt
+                  variant={card.silhouetteVariant}
+                  customImageUrl={card.customImageUrl}
+                  alt={`${card.code} - ${card.title}`}
+                />
+
+                <div className="tcg-meta-row">
+                  <span className="tcg-edition">ENIGMA · 2027</span>
+                  <span className="silhouette-code">{card.code}</span>
+                </div>
+
+                <div className="tcg-lore-box">
+                  <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
+                  <p className="tcg-desc">{card.description}</p>
+                  <div className="tcg-stats-row">
+                    <span>PWR / {card.power ?? 2800}</span>
+                    <span>DEF / {card.defense ?? 2600}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // TAMPILAN LOGIN EMAIL & PASSWORD KELOMPOK
   if (!snapshot) {
     return (
       <div className="dept-login-wrapper">
@@ -233,8 +357,15 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
           <p className="dept-login-desc">
             Gunakan email dan password resmi kelompok Anda untuk masuk ke halaman pemilihan karakter
-            Department Head. Setiap kelompok hanya menggunakan satu akun login.
+            Department Head. Setelah Anda submit pilihan, akun otomatis keluar dan terkunci.
           </p>
+
+          {postSubmitNotice && (
+            <div className="notice success-notice dept-head-notice" role="status">
+              <Icon name="check" size={18} />
+              <span>{postSubmitNotice}</span>
+            </div>
+          )}
 
           <form onSubmit={handleLogin} className="admin-form">
             <div className="form-field-group">
@@ -284,6 +415,11 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
               <Icon name="arrow" size={18} />
             </button>
           </form>
+
+          <div className="announcement-banner is-compact" role="note">
+            <Icon name="calendar" size={16} />
+            <span>{DEPT_HEAD_ANNOUNCEMENT_LABEL}</span>
+          </div>
         </div>
       </div>
     );
@@ -294,7 +430,6 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     snapshot.takenByOtherCardIds.length -
     (snapshot.mySelection?.cardIds.length ?? 0);
   const isAllSubmitted = snapshot.totalGroupsSubmitted >= snapshot.maxGroups;
-  const hasSubmitted = Boolean(snapshot.mySelection);
 
   return (
     <div className="page-shell dept-head-shell">
@@ -306,8 +441,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
             </span>
             <h1 className="dept-head-title">Pemilihan Karakter Dept Head</h1>
             <p className="dept-head-subtitle">
-              Amati 9 kartu karakter beserta petunjuk sifatnya, lalu tentukan karakter Department Head
-              yang paling tepat untuk tim Anda. Karakter yang telah dipilih tim lain otomatis dikunci.
+              Amati 9 kartu karakter beserta kemampuan dan statistiknya, lalu tentukan pilihan untuk
+              tim Anda. Setelah submit, akun akan otomatis keluar dan tidak dapat memilih ulang.
             </p>
           </div>
           <div className="dept-hero-actions">
@@ -344,15 +479,19 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
               {Math.max(0, availableCardsCount)} / {snapshot.cards.length} Karakter
             </strong>
           </div>
-          <div className={`dept-metric-pill ${snapshot.requiredCount === 1 && !hasSubmitted ? "is-final-slot" : ""}`}>
+          <div className={`dept-metric-pill ${snapshot.requiredCount === 1 ? "is-final-slot" : ""}`}>
             <span className="metric-label">Kuota Pemilihan Tim Anda</span>
             <strong className="metric-value">
-              {hasSubmitted
-                ? `Terkunci · ${snapshot.mySelection?.cardIds.length ?? 0} Karakter Terpilih`
-                : isAllSubmitted
-                  ? "Semua Kelompok Selesai"
-                  : `Pilih ${snapshot.requiredCount} Karakter`}
+              {isAllSubmitted ? "Semua Kelompok Selesai" : `Pilih ${snapshot.requiredCount} Karakter`}
             </strong>
+          </div>
+        </div>
+
+        <div className="announcement-banner" role="note">
+          <Icon name="calendar" size={18} />
+          <div>
+            <strong>Jadwal Pengumuman Department Head</strong>
+            <p>{DEPT_HEAD_ANNOUNCEMENT_LABEL}</p>
           </div>
         </div>
       </section>
@@ -364,47 +503,12 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
             <h2 className="dept-step-heading">
               Pilih Kartu Karakter — {snapshot.group.title}
             </h2>
-            {snapshot.mySelection ? (
-              <p className="section-caption is-confirmed-text">
-                Pilihan tim Anda telah dikunci pada {formatRegistrationTime(snapshot.mySelection.submittedAt)}.
-              </p>
-            ) : (
-              <p className="section-caption">
-                Silakan pilih tepat{" "}
-                <strong>
-                  {snapshot.requiredCount} karakter
-                </strong>{" "}
-                yang mewakili kebutuhan tim Anda.
-              </p>
-            )}
+            <p className="section-caption">
+              Silakan pilih tepat <strong>{snapshot.requiredCount} karakter</strong> yang mewakili
+              kebutuhan tim Anda.
+            </p>
           </div>
         </div>
-
-        {snapshot.mySelection && (
-          <div className="notice success-notice dept-head-notice" role="status">
-            <Icon name="check" size={18} />
-            <div>
-              <strong>Pilihan Karakter Sudah Tersimpan</strong>
-              <p>
-                {snapshot.group.title} telah memilih:{" "}
-                {snapshot.mySelection.cardIds
-                  .map((id) => {
-                    const c = cardById.get(id);
-                    return c ? `${c.code} (${c.title})` : `Karakter ${id}`;
-                  })
-                  .join(" & ")}
-                . Hubungi panitia di Admin Enigma apabila diperlukan reset.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {successMessage && !snapshot.mySelection && (
-          <div className="notice success-notice dept-head-notice" role="status">
-            <Icon name="check" size={18} />
-            <span>{successMessage}</span>
-          </div>
-        )}
 
         {errorMessage && (
           <div className="notice error-notice dept-head-notice" role="alert">
@@ -415,10 +519,9 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
         <div className="silhouette-grid">
           {snapshot.cards.map((card) => {
-            const isOwnedByCurrentGroup = Boolean(snapshot.mySelection?.cardIds.includes(card.id));
-            const isTakenByOther = !isOwnedByCurrentGroup && takenByOtherSet.has(card.id);
+            const isTakenByOther = takenByOtherSet.has(card.id);
             const isDraftSelected = selectedCardIds.includes(card.id);
-            const isDisabled = hasSubmitted || isTakenByOther || isAllSubmitted || submitting;
+            const isDisabled = isTakenByOther || isAllSubmitted || submitting;
 
             return (
               <button
@@ -427,16 +530,12 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
                 disabled={isDisabled}
                 onClick={() => handleToggleCard(card.id)}
                 className={`silhouette-card ${isDraftSelected ? "is-selected" : ""} ${
-                  isOwnedByCurrentGroup ? "is-owned" : ""
-                } ${isTakenByOther ? "is-taken" : ""}`}
+                  isTakenByOther ? "is-taken" : ""
+                }`}
               >
                 <div className="tcg-card-topbar">
                   <h3 className="tcg-card-name">{card.title}</h3>
-                  {isOwnedByCurrentGroup ? (
-                    <span className="silhouette-status-pill is-owned">
-                      <Icon name="check" size={13} /> Pilihan Tim Anda
-                    </span>
-                  ) : isTakenByOther ? (
+                  {isTakenByOther ? (
                     <span className="silhouette-status-pill is-taken">
                       <Icon name="lock" size={13} /> Karakter Sudah Dipilih
                     </span>
@@ -472,8 +571,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
                   <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
                   <p className="tcg-desc">{card.description}</p>
                   <div className="tcg-stats-row">
-                    <span>PWR / {card.power}</span>
-                    <span>DEF / {card.defense}</span>
+                    <span>PWR / {card.power ?? 2800}</span>
+                    <span>DEF / {card.defense ?? 2600}</span>
                   </div>
                 </div>
               </button>
@@ -481,7 +580,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
           })}
         </div>
 
-        {!hasSubmitted && !isAllSubmitted && (
+        {!isAllSubmitted && (
           <div className="dept-submit-bar">
             <div className="dept-submit-summary">
               <span className="summary-label">

@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { buildLockedDeptHeadView, buildPublicDeptHeadSnapshot } from "@/domain/dept-head";
 import {
   createDeptHeadSessionToken,
   DEPT_HEAD_COOKIE_NAME,
   verifyDeptHeadCredentials,
 } from "@/server/dept-head-auth";
-import { getPublicDeptHeadSnapshot } from "@/server/dept-head-service";
+import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,11 +34,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const snapshot = await getPublicDeptHeadSnapshot(account.groupNumber);
+    const fullSnapshot = await getDeptHeadSnapshot();
+    const lockedView = buildLockedDeptHeadView(fullSnapshot, account.groupNumber);
+
+    // Jika kelompok sudah pernah submit, akun tidak diberi sesi aktif untuk masuk ke form lagi
+    // dan hanya menampilkan kartu karakter Dept Head yang sudah dipilih sebelumnya.
+    if (lockedView) {
+      const response = Response.json({
+        success: true,
+        alreadySubmitted: true,
+        lockedView,
+      });
+      response.headers.set(
+        "Set-Cookie",
+        `${DEPT_HEAD_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:01 GMT${
+          process.env.NODE_ENV === "production" ? "; Secure" : ""
+        }`
+      );
+      return response;
+    }
+
+    const publicSnapshot = buildPublicDeptHeadSnapshot(fullSnapshot, account.groupNumber);
     const token = createDeptHeadSessionToken(account.groupNumber);
     const response = Response.json({
       success: true,
-      snapshot,
+      alreadySubmitted: false,
+      snapshot: publicSnapshot,
     });
 
     response.headers.set(

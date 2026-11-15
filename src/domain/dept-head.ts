@@ -83,6 +83,19 @@ export interface PublicDeptHeadSnapshot {
   takenByOtherCardIds: number[];
 }
 
+export interface LockedDeptHeadView {
+  group: {
+    number: number;
+    name: string;
+    title: string;
+  };
+  selectedCards: DeptHeadCard[];
+  submittedAt: string;
+  announcementDateLabel: string;
+}
+
+export const DEPT_HEAD_ANNOUNCEMENT_LABEL = "Pengumuman resmi Department Head akan diumumkan pada tanggal 19/11.";
+
 export const submitDeptHeadSchema = z.object({
   cardIds: z.array(z.number().int().min(1).max(9)).min(1).max(2),
 });
@@ -333,6 +346,37 @@ export function buildPublicDeptHeadSnapshot(
         }
       : null,
     takenByOtherCardIds,
+  };
+}
+
+export function buildLockedDeptHeadView(
+  snapshot: DeptHeadStateSnapshot,
+  groupNumber: number
+): LockedDeptHeadView | null {
+  const groupMeta = officialGroups.find((g) => g.number === groupNumber);
+  if (!groupMeta) return null;
+
+  const myRecord = snapshot.selections.find((s) => s.groupNumber === groupNumber);
+  if (!myRecord) return null;
+
+  const cardById = new Map<number, DeptHeadCard>();
+  for (const card of snapshot.cards) {
+    cardById.set(card.id, card);
+  }
+
+  const selectedCards = myRecord.cardIds
+    .map((id) => cardById.get(id))
+    .filter((card): card is DeptHeadCard => Boolean(card));
+
+  return {
+    group: {
+      number: groupMeta.number,
+      name: groupMeta.name,
+      title: groupMeta.title,
+    },
+    selectedCards,
+    submittedAt: myRecord.submittedAt,
+    announcementDateLabel: DEPT_HEAD_ANNOUNCEMENT_LABEL,
   };
 }
 

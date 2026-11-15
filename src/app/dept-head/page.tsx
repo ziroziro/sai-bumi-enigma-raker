@@ -14,9 +14,11 @@ export const metadata: Metadata = {
 
 export default async function DeptHeadPage() {
   const authenticatedGroup = await getDeptHeadGroupFromCookies();
-  const initialSnapshot = authenticatedGroup
+  const candidateSnapshot = authenticatedGroup
     ? await getPublicDeptHeadSnapshot(authenticatedGroup)
     : null;
+  const initialSnapshot =
+    candidateSnapshot && !candidateSnapshot.mySelection ? candidateSnapshot : null;
 
   return (
     <>
