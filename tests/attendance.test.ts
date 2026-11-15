@@ -10,6 +10,12 @@ import {
 import { generateCode128Svg } from "../src/domain/barcode-svg";
 import { generateQrSvg, generateQrMatrix } from "../src/domain/qrcode-svg";
 import { generateAttendanceExcel, generateBarcodesZip } from "../src/domain/excel-export";
+import {
+  deleteServerAttendance,
+  getServerAttendanceMetadata,
+  recordServerAttendance,
+  resetAllServerAttendance,
+} from "../src/server/attendance-store";
 
 test("attendance roster has exactly 35 participants with valid data", () => {
   assert.equal(ATTENDANCE_ROSTER.length, 35);
@@ -118,4 +124,27 @@ test("generateBarcodesZip creates valid zip containing all 35 participant SVGs n
   assert.ok(zipText.includes("REZA AGNESTASIA - DMAD18021.svg"));
   assert.ok(zipText.includes("SONNY KURNIAWAN - DMMK22010.svg"));
   assert.ok(zipText.includes("<svg"));
+});
+
+test("attendance-store records, preserves initial timestamp, tracks deletedNiks and lastResetAt", async () => {
+  await resetAllServerAttendance();
+  let meta = await getServerAttendanceMetadata();
+  assert.deepEqual(meta.records, {});
+  assert.ok(meta.lastResetAt);
+  assert.deepEqual(meta.deletedNiks, []);
+
+  await recordServerAttendance("dmad18021", "2026-11-15T10:00:00.000Z");
+  await recordServerAttendance("DMAD18021", "2026-11-15T12:00:00.000Z");
+  meta = await getServerAttendanceMetadata();
+  assert.equal(meta.records.DMAD18021, "2026-11-15T10:00:00.000Z");
+
+  await deleteServerAttendance("DMAD18021");
+  meta = await getServerAttendanceMetadata();
+  assert.equal(meta.records.DMAD18021, undefined);
+  assert.ok(meta.deletedNiks.includes("DMAD18021"));
+
+  await resetAllServerAttendance();
+  meta = await getServerAttendanceMetadata();
+  assert.deepEqual(meta.records, {});
+  assert.deepEqual(meta.deletedNiks, []);
 });

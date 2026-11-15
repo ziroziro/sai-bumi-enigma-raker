@@ -413,12 +413,25 @@ export function AttendanceApp() {
         return updated;
       });
 
-      // Sync attendance to server
+      // Sync attendance to server database with automatic retry for resilience
+      const payload = JSON.stringify({ nik: member.nik, timestamp: isoStr });
       void fetch("/api/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nik: member.nik, timestamp: isoStr }),
-      }).catch(() => {});
+        body: payload,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("sync_failed");
+        })
+        .catch(() => {
+          setTimeout(() => {
+            void fetch("/api/attendance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: payload,
+            }).catch(() => {});
+          }, 800);
+        });
 
       // Save silent device lock if not already set
       if (!deviceLock) {

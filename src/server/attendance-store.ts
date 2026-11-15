@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { findMemberByBarcode } from "@/domain/attendance";
+import { createBackendClient } from "./supabase";
 
 export interface AttendanceState {
   records: Record<string, string>;
@@ -11,7 +12,28 @@ export interface AttendanceState {
 
 const DATA_FILE_PATH = path.join(process.cwd(), ".attendance-data.json");
 
+function isTestRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === "test" ||
+    Boolean(process.env.NODE_TEST_CONTEXT) ||
+    process.execArgv.some((arg) => arg.includes("--test")) ||
+    process.argv.some((arg) => arg.includes("--test"))
+  );
+}
+
+function isSupabaseConfigured(): boolean {
+  if (process.env.APP_DATA_MODE === "demo") return false;
+  return Boolean(
+    process.env.SUPABASE_URL &&
+      (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
+      process.env.SUPABASE_EVENT_SLUG
+  );
+}
+
 function readStateFromDisk(): AttendanceState {
+  if (isTestRuntime()) {
+    return { records: {}, lastResetAt: null, deletedNiks: [] };
+  }
   try {
     if (fs.existsSync(DATA_FILE_PATH)) {
       const content = fs.readFileSync(DATA_FILE_PATH, "utf8");
@@ -33,14 +55,14 @@ function readStateFromDisk(): AttendanceState {
 }
 
 function writeStateToDisk(state: AttendanceState): void {
+  if (isTestRuntime()) return;
   try {
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(state, null, 2), "utf8");
   } catch {
-    // Ignore in read-only environments
+    // Ignore in read-only environments (e.g., Vercel Serverless)
   }
 }
 
-// Global in-memory storage to synchronize attendance across requests and persist across Fast Refresh
 const globalAttendanceStore = globalThis as unknown as {
   __sai_bumi_attendance_state?: AttendanceState;
 };
@@ -56,40 +78,97 @@ function getActiveState(): AttendanceState {
   return globalAttendanceStore.__sai_bumi_attendance_state;
 }
 
+function setActiveState(state: AttendanceState): AttendanceState {
+  globalAttendanceStore.__sai_bumi_attendance_state = state;
+  writeStateToDisk(state);
+  return state;
+}
+
+async function fetchSyncStateFromSupabase(): Promise<{
+  lastResetAt: string | null;
+  deletedNiks: string[];
+}> {
+  const { client, config } = createBackendClient();
+  const { data, error } = await client
+    .from("attendance_sync_state")
+    .select("last_reset_at, deleted_niks")
+    .eq("event_slug", config.eventSlug)
+    .maybeSingle();
+
+  // If 000009 migration has not been applied yet, fall back cleanly to cached sync metadata
+  if (error) {
+    const cached = getActiveState();
+    return {
+      lastResetAt: cached.lastResetAt,
+      deletedNiks: [...cached.deletedNiks],
+    };
+  }
+
+  return {
+    lastResetAt: typeof data?.last_reset_at === "string" ? data.last_reset_at : null,
+    deletedNiks: Array.isArray(data?.deleted_niks)
+      ? data.deleted_niks.map((v: unknown) => String(v).trim().toUpperCase()).filter(Boolean)
+      : [],
+  };
+}
+
+async function persistSyncStateToSupabase(
+  lastResetAt: string | null,
+  deletedNiks: string[]
+): Promise<void> {
+  const { client, config } = createBackendClient();
+  await client.from("attendance_sync_state").upsert(
+    {
+      event_slug: config.eventSlug,
+      last_reset_at: lastResetAt,
+      deleted_niks: deletedNiks,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "event_slug" }
+  );
+}
+
 export function getServerAttendanceRecords(): Record<string, string> {
   const state = getActiveState();
   return { ...state.records };
 }
 
-export async function getServerAttendanceMetadata(): Promise<{
-  records: Record<string, string>;
-  lastResetAt: string | null;
-  deletedNiks: string[];
-}> {
-  const state = getActiveState();
-
-  // If Supabase is configured and not in demo mode, sync latest records from Supabase table
-  if (process.env.APP_DATA_MODE !== "demo") {
-    try {
-      const { createBackendClient } = await import("./supabase");
-      const { client, config } = createBackendClient();
-      const { data, error } = await client
+export async function getServerAttendanceMetadata(): Promise<AttendanceState> {
+  if (isSupabaseConfigured()) {
+    const { client, config } = createBackendClient();
+    const [{ data, error }, syncMeta] = await Promise.all([
+      client
         .from("attendance_records")
         .select("nik, attended_at")
-        .eq("event_slug", config.eventSlug);
+        .eq("event_slug", config.eventSlug),
+      fetchSyncStateFromSupabase(),
+    ]);
 
-      if (!error && data && Array.isArray(data)) {
-        data.forEach((row: { nik: string; attended_at: string }) => {
-          if (row.nik && row.attended_at && !state.deletedNiks.includes(row.nik)) {
-            state.records[row.nik] = row.attended_at;
-          }
-        });
-      }
-    } catch {
-      // Graceful fallback to local memory / disk
+    if (error) {
+      throw new Error(`Gagal memuat data absensi dari Supabase: ${error.message}`);
     }
+
+    const dbRecords: Record<string, string> = {};
+    for (const row of data ?? []) {
+      if (row.nik && row.attended_at) {
+        dbRecords[String(row.nik).trim().toUpperCase()] = String(row.attended_at);
+      }
+    }
+
+    const syncedState: AttendanceState = {
+      records: dbRecords,
+      lastResetAt: syncMeta.lastResetAt,
+      deletedNiks: syncMeta.deletedNiks,
+    };
+    setActiveState(syncedState);
+    return {
+      records: { ...syncedState.records },
+      lastResetAt: syncedState.lastResetAt,
+      deletedNiks: [...syncedState.deletedNiks],
+    };
   }
 
+  const state = getActiveState();
   return {
     records: { ...state.records },
     lastResetAt: state.lastResetAt,
@@ -97,90 +176,126 @@ export async function getServerAttendanceMetadata(): Promise<{
   };
 }
 
-export async function recordServerAttendance(nik: string, timestamp?: string): Promise<Record<string, string>> {
-  const state = getActiveState();
+export async function recordServerAttendance(
+  nik: string,
+  timestamp?: string
+): Promise<Record<string, string>> {
   const cleanNik = nik.trim().toUpperCase();
   const isoStr = timestamp || new Date().toISOString();
-  state.records[cleanNik] = state.records[cleanNik] || isoStr;
-  state.deletedNiks = state.deletedNiks.filter((n) => n !== cleanNik);
-  globalAttendanceStore.__sai_bumi_attendance_state = state;
-  writeStateToDisk(state);
 
-  // If in Supabase mode, persist directly to PostgreSQL database
-  if (process.env.APP_DATA_MODE !== "demo") {
-    try {
-      const { createBackendClient } = await import("./supabase");
-      const { client, config } = createBackendClient();
-      const member = findMemberByBarcode(cleanNik);
-      await client
-        .from("attendance_records")
-        .upsert(
-          {
-            event_slug: config.eventSlug,
-            nik: cleanNik,
-            nama: member ? member.nama : cleanNik,
-            barcode: member ? member.barcode : cleanNik,
-            group_number: member ? member.groupNumber : null,
-            attended_at: isoStr,
-          },
-          { onConflict: "event_slug,nik" }
-        );
-    } catch {
-      // Graceful fallback to memory/disk
+  if (isSupabaseConfigured()) {
+    const syncMeta = await fetchSyncStateFromSupabase();
+    if (
+      syncMeta.lastResetAt &&
+      timestamp &&
+      new Date(timestamp).getTime() < new Date(syncMeta.lastResetAt).getTime()
+    ) {
+      // Ignore stale offline/self-heal replay recorded before an admin reset
+      const fresh = await getServerAttendanceMetadata();
+      return fresh.records;
     }
+
+    const { client, config } = createBackendClient();
+    const member = findMemberByBarcode(cleanNik);
+    const { error } = await client.from("attendance_records").upsert(
+      {
+        event_slug: config.eventSlug,
+        nik: cleanNik,
+        nama: member ? member.nama : cleanNik,
+        barcode: member ? member.barcode : cleanNik,
+        group_number: member ? member.groupNumber : null,
+        attended_at: isoStr,
+      },
+      { onConflict: "event_slug,nik", ignoreDuplicates: true }
+    );
+
+    if (error) {
+      throw new Error(`Gagal menyimpan absensi ke database: ${error.message}`);
+    }
+
+    if (syncMeta.deletedNiks.includes(cleanNik)) {
+      const remainingDeleted = syncMeta.deletedNiks.filter((n) => n !== cleanNik);
+      await persistSyncStateToSupabase(syncMeta.lastResetAt, remainingDeleted);
+    }
+
+    const fresh = await getServerAttendanceMetadata();
+    return fresh.records;
   }
 
-  return { ...state.records };
+  const state = getActiveState();
+  const nextState: AttendanceState = {
+    records: {
+      ...state.records,
+      [cleanNik]: state.records[cleanNik] || isoStr,
+    },
+    lastResetAt: state.lastResetAt,
+    deletedNiks: state.deletedNiks.filter((n) => n !== cleanNik),
+  };
+  setActiveState(nextState);
+  return { ...nextState.records };
 }
 
 export async function deleteServerAttendance(nik: string): Promise<Record<string, string>> {
-  const state = getActiveState();
   const cleanNik = nik.trim().toUpperCase();
-  delete state.records[cleanNik];
-  if (!state.deletedNiks.includes(cleanNik)) {
-    state.deletedNiks.push(cleanNik);
-  }
-  globalAttendanceStore.__sai_bumi_attendance_state = state;
-  writeStateToDisk(state);
 
-  if (process.env.APP_DATA_MODE !== "demo") {
-    try {
-      const { createBackendClient } = await import("./supabase");
-      const { client, config } = createBackendClient();
-      await client
-        .from("attendance_records")
-        .delete()
-        .eq("event_slug", config.eventSlug)
-        .eq("nik", cleanNik);
-    } catch {
-      // Graceful fallback
+  if (isSupabaseConfigured()) {
+    const { client, config } = createBackendClient();
+    const { error } = await client
+      .from("attendance_records")
+      .delete()
+      .eq("event_slug", config.eventSlug)
+      .eq("nik", cleanNik);
+
+    if (error) {
+      throw new Error(`Gagal menghapus absensi dari database: ${error.message}`);
     }
+
+    const syncMeta = await fetchSyncStateFromSupabase();
+    const updatedDeleted = syncMeta.deletedNiks.includes(cleanNik)
+      ? syncMeta.deletedNiks
+      : [...syncMeta.deletedNiks, cleanNik];
+    await persistSyncStateToSupabase(syncMeta.lastResetAt, updatedDeleted);
+
+    const fresh = await getServerAttendanceMetadata();
+    return fresh.records;
   }
 
-  return { ...state.records };
+  const state = getActiveState();
+  const nextRecords = { ...state.records };
+  delete nextRecords[cleanNik];
+  const nextDeleted = state.deletedNiks.includes(cleanNik)
+    ? state.deletedNiks
+    : [...state.deletedNiks, cleanNik];
+
+  setActiveState({
+    records: nextRecords,
+    lastResetAt: state.lastResetAt,
+    deletedNiks: nextDeleted,
+  });
+  return nextRecords;
 }
 
 export async function resetAllServerAttendance(): Promise<Record<string, string>> {
-  const state: AttendanceState = {
-    records: {},
-    lastResetAt: new Date().toISOString(),
-    deletedNiks: [],
-  };
-  globalAttendanceStore.__sai_bumi_attendance_state = state;
-  writeStateToDisk(state);
+  const resetIso = new Date().toISOString();
 
-  if (process.env.APP_DATA_MODE !== "demo") {
-    try {
-      const { createBackendClient } = await import("./supabase");
-      const { client, config } = createBackendClient();
-      await client
-        .from("attendance_records")
-        .delete()
-        .eq("event_slug", config.eventSlug);
-    } catch {
-      // Graceful fallback if database schema is local
+  if (isSupabaseConfigured()) {
+    const { client, config } = createBackendClient();
+    const { error } = await client
+      .from("attendance_records")
+      .delete()
+      .eq("event_slug", config.eventSlug);
+
+    if (error) {
+      throw new Error(`Gagal mengosongkan data absensi di database: ${error.message}`);
     }
+
+    await persistSyncStateToSupabase(resetIso, []);
   }
 
+  setActiveState({
+    records: {},
+    lastResetAt: resetIso,
+    deletedNiks: [],
+  });
   return {};
 }

@@ -5,16 +5,24 @@ import {
   resetAllServerAttendance,
 } from "@/server/attendance-store";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     const meta = await getServerAttendanceMetadata();
-    return NextResponse.json({
-      records: meta.records,
-      lastResetAt: meta.lastResetAt,
-      deletedNiks: meta.deletedNiks,
-    });
+    return NextResponse.json(
+      {
+        records: meta.records,
+        lastResetAt: meta.lastResetAt,
+        deletedNiks: meta.deletedNiks,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Gagal memuat data kehadiran." }, { status: 500 });
   }

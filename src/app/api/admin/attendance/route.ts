@@ -30,12 +30,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Sesi admin tidak valid." }, { status: 401 });
   }
 
-  const meta = await getServerAttendanceMetadata();
-  return NextResponse.json({
-    records: meta.records,
-    lastResetAt: meta.lastResetAt,
-    deletedNiks: meta.deletedNiks,
-  });
+  try {
+    const meta = await getServerAttendanceMetadata();
+    return NextResponse.json(
+      {
+        records: meta.records,
+        lastResetAt: meta.lastResetAt,
+        deletedNiks: meta.deletedNiks,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gagal memuat data absensi.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function DELETE(request: Request) {
