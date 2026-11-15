@@ -62,8 +62,26 @@ export interface DeptHeadStateSnapshot {
   takenCardIds: Record<number, DeptHeadClaimOwner>;
 }
 
+export interface PublicDeptHeadSelection {
+  cardIds: number[];
+  submittedAt: string;
+}
+
+export interface PublicDeptHeadSnapshot {
+  group: {
+    number: number;
+    name: string;
+    title: string;
+  };
+  cards: DeptHeadCard[];
+  totalGroupsSubmitted: number;
+  maxGroups: number;
+  requiredCount: number;
+  mySelection: PublicDeptHeadSelection | null;
+  takenByOtherCardIds: number[];
+}
+
 export const submitDeptHeadSchema = z.object({
-  groupNumber: z.number().int().min(1).max(4),
   cardIds: z.array(z.number().int().min(1).max(9)).min(1).max(2),
 });
 
@@ -93,7 +111,7 @@ export const updateDeptHeadCardSchema = z.object({
 export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   {
     id: 1,
-    code: "SILUET 01",
+    code: "KARAKTER 1",
     title: "Bayangan Sang Pengatur Arah",
     roleHint: "Strategi & Eksekusi Terukur",
     description:
@@ -103,7 +121,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 2,
-    code: "SILUET 02",
+    code: "KARAKTER 2",
     title: "Bayangan Penjaga Garis Depan",
     roleHint: "Aksi Cepat & Koordinasi Lapangan",
     description:
@@ -113,7 +131,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 3,
-    code: "SILUET 03",
+    code: "KARAKTER 3",
     title: "Bayangan Sang Pengamat Detail",
     roleHint: "Ketelitian Angka & Analisis Tajam",
     description:
@@ -123,7 +141,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 4,
-    code: "SILUET 04",
+    code: "KARAKTER 4",
     title: "Bayangan Perangkai Relasi",
     roleHint: "Komunikasi & Energi Kolaborasi",
     description:
@@ -133,7 +151,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 5,
-    code: "SILUET 05",
+    code: "KARAKTER 5",
     title: "Bayangan Sang Arsitek Sistem",
     roleHint: "Struktur Kerja & Efisiensi",
     description:
@@ -143,7 +161,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 6,
-    code: "SILUET 06",
+    code: "KARAKTER 6",
     title: "Bayangan Ahli Taktik Senyap",
     roleHint: "Perencanaan Cadangan & Risiko",
     description:
@@ -153,7 +171,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 7,
-    code: "SILUET 07",
+    code: "KARAKTER 7",
     title: "Bayangan Penjaga Standar",
     roleHint: "Disiplin & Kualitas Hasil",
     description:
@@ -163,7 +181,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 8,
-    code: "SILUET 08",
+    code: "KARAKTER 8",
     title: "Bayangan Pengurai Sandi",
     roleHint: "Inovasi & Pemecahan Masalah",
     description:
@@ -173,7 +191,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
   },
   {
     id: 9,
-    code: "SILUET 09",
+    code: "KARAKTER 9",
     title: "Bayangan Komandan Enigma",
     roleHint: "Penggerak Visi & Penentu Akhir",
     description:
@@ -182,6 +200,16 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     customImageUrl: null,
   },
 ];
+
+function normalizeCardCode(rawCode: string | undefined, fallback: string): string {
+  const trimmed = rawCode?.trim();
+  if (!trimmed) return fallback;
+  const legacyMatch = /^SILUET\s*0?([1-9])$/i.exec(trimmed);
+  if (legacyMatch) {
+    return `KARAKTER ${legacyMatch[1]}`;
+  }
+  return trimmed;
+}
 
 export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptHeadCard[] {
   const byId = new Map<number, Partial<DeptHeadCard>>();
@@ -196,7 +224,7 @@ export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptH
     if (!override) return { ...base };
     return {
       id: base.id,
-      code: override.code?.trim() || base.code,
+      code: normalizeCardCode(override.code, base.code),
       title: override.title?.trim() || base.title,
       roleHint: override.roleHint?.trim() || base.roleHint,
       description: override.description?.trim() || base.description,
@@ -248,6 +276,37 @@ export function buildDeptHeadSnapshot(
   };
 }
 
+export function buildPublicDeptHeadSnapshot(
+  snapshot: DeptHeadStateSnapshot,
+  groupNumber: number
+): PublicDeptHeadSnapshot {
+  const groupMeta = officialGroups.find((g) => g.number === groupNumber) ?? officialGroups[0];
+  const myRecord = snapshot.selections.find((s) => s.groupNumber === groupMeta.number) ?? null;
+  const takenByOtherCardIds = Object.entries(snapshot.takenCardIds)
+    .filter(([, owner]) => owner.groupNumber !== groupMeta.number)
+    .map(([id]) => Number(id))
+    .sort((a, b) => a - b);
+
+  return {
+    group: {
+      number: groupMeta.number,
+      name: groupMeta.name,
+      title: groupMeta.title,
+    },
+    cards: snapshot.cards,
+    totalGroupsSubmitted: snapshot.totalGroupsSubmitted,
+    maxGroups: snapshot.maxGroups,
+    requiredCount: myRecord ? myRecord.cardIds.length : snapshot.nextRequiredCount,
+    mySelection: myRecord
+      ? {
+          cardIds: [...myRecord.cardIds],
+          submittedAt: myRecord.submittedAt,
+        }
+      : null,
+    takenByOtherCardIds,
+  };
+}
+
 export type DeptHeadValidationErrorCode =
   | "INVALID_GROUP"
   | "GROUP_ALREADY_SUBMITTED"
@@ -287,21 +346,18 @@ export function validateDeptHeadSelectionInput(
   const requiredCount = getRequiredDeptHeadCount(existingSelections.length);
   const uniqueIds = new Set(cardIds);
   if (uniqueIds.size !== cardIds.length) {
-    return { ok: false, code: "DUPLICATE_CARD", message: "Pilihan siluet tidak boleh sama." };
+    return { ok: false, code: "DUPLICATE_CARD", message: "Pilihan karakter tidak boleh sama." };
   }
 
   if (cardIds.some((id) => !Number.isInteger(id) || id < 1 || id > 9)) {
-    return { ok: false, code: "INVALID_CARD", message: "Terdapat pilihan siluet yang tidak valid." };
+    return { ok: false, code: "INVALID_CARD", message: "Terdapat pilihan karakter yang tidak valid." };
   }
 
   if (cardIds.length !== requiredCount) {
     return {
       ok: false,
       code: "INVALID_CARD_COUNT",
-      message:
-        requiredCount === 1
-          ? "Kelompok terakhir hanya dapat memilih tepat 1 Dept Head."
-          : `Silakan pilih tepat ${requiredCount} Dept Head untuk kelompok Anda.`,
+      message: `Silakan pilih tepat ${requiredCount} karakter untuk kelompok Anda.`,
     };
   }
 
@@ -314,7 +370,7 @@ export function validateDeptHeadSelectionInput(
     return {
       ok: false,
       code: "CARD_ALREADY_TAKEN",
-      message: `Siluet #${String(taken).padStart(2, "0")} sudah dipilih oleh kelompok lain. Silakan pilih siluet lain yang masih tersedia.`,
+      message: `KARAKTER ${taken} sudah dipilih oleh tim lain. Silakan pilih karakter lain yang masih tersedia.`,
     };
   }
 

@@ -1,18 +1,22 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { DeptHeadApp } from "@/components/dept-head-app";
-import { getDeptHeadSnapshot } from "@/server/dept-head-service";
+import { getDeptHeadGroupFromCookies } from "@/server/dept-head-auth";
+import { getPublicDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Pemilihan Dept Head | Sai Bumi Enigma",
   description:
-    "Pilih nama kelompok lalu tentukan siluet Department Head sesuai urutan kuota kelompok di The Sai Bumi Enigma.",
+    "Masuk dengan akun kelompok untuk mengamati 9 karakter dan menentukan Department Head di The Sai Bumi Enigma.",
 };
 
 export default async function DeptHeadPage() {
-  const initialSnapshot = await getDeptHeadSnapshot();
+  const authenticatedGroup = await getDeptHeadGroupFromCookies();
+  const initialSnapshot = authenticatedGroup
+    ? await getPublicDeptHeadSnapshot(authenticatedGroup)
+    : null;
 
   return (
     <>

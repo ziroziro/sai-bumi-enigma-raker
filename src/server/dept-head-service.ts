@@ -2,10 +2,12 @@ import "server-only";
 import { getGroupTitle } from "@/config/event";
 import {
   buildDeptHeadSnapshot,
+  buildPublicDeptHeadSnapshot,
   validateDeptHeadSelectionInput,
   type DeptHeadCard,
   type DeptHeadSelectionRecord,
   type DeptHeadStateSnapshot,
+  type PublicDeptHeadSnapshot,
 } from "@/domain/dept-head";
 import { createBackendClient } from "./supabase";
 import {
@@ -39,21 +41,21 @@ function mapRpcError(message: string): DeptHeadServiceError {
   if (message.includes("CARD_ALREADY_TAKEN")) {
     return new DeptHeadServiceError(
       "CARD_ALREADY_TAKEN",
-      "Salah satu siluet sudah terlebih dahulu dipilih oleh kelompok lain.",
+      "Salah satu karakter sudah terpilih oleh tim lain.",
       409
     );
   }
   if (message.includes("ALL_GROUPS_SUBMITTED")) {
     return new DeptHeadServiceError(
       "ALL_GROUPS_SUBMITTED",
-      "Keempat kelompok sudah selesai menentukan pilihan Dept Head.",
+      "Seluruh kelompok sudah menyelesaikan pemilihan karakter.",
       409
     );
   }
   if (message.includes("INVALID_CARD_COUNT")) {
     return new DeptHeadServiceError(
       "INVALID_CARD_COUNT",
-      "Jumlah pilihan Dept Head tidak sesuai dengan kuota urutan kelompok saat ini.",
+      "Jumlah karakter yang dipilih tidak sesuai dengan kuota kelompok saat ini.",
       400
     );
   }
@@ -101,6 +103,13 @@ export async function getDeptHeadSnapshot(): Promise<DeptHeadStateSnapshot> {
   } catch {
     return getLocalDeptHeadSnapshot();
   }
+}
+
+export async function getPublicDeptHeadSnapshot(
+  groupNumber: number
+): Promise<PublicDeptHeadSnapshot> {
+  const full = await getDeptHeadSnapshot();
+  return buildPublicDeptHeadSnapshot(full, groupNumber);
 }
 
 export async function submitDeptHeadSelection(

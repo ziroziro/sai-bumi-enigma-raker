@@ -3,10 +3,17 @@ import test from "node:test";
 import {
   DEFAULT_DEPT_HEAD_CARDS,
   buildDeptHeadSnapshot,
+  buildPublicDeptHeadSnapshot,
   getRequiredDeptHeadCount,
   mergeDeptHeadCards,
   validateDeptHeadSelectionInput,
 } from "../src/domain/dept-head";
+import {
+  createDeptHeadSessionToken,
+  getDeptHeadAccounts,
+  verifyDeptHeadCredentials,
+  verifyDeptHeadSessionToken,
+} from "../src/server/dept-head-auth";
 import {
   deleteLocalDeptHeadSelection,
   getLocalDeptHeadSnapshot,
@@ -16,18 +23,19 @@ import {
   upsertLocalDeptHeadCard,
 } from "../src/server/dept-head-store";
 
-test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 9 kartu siluet unik", () => {
+test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 9 kartu karakter unik bernama KARAKTER 1..9", () => {
   assert.equal(DEFAULT_DEPT_HEAD_CARDS.length, 9);
   const ids = new Set(DEFAULT_DEPT_HEAD_CARDS.map((card) => card.id));
   assert.equal(ids.size, 9);
-  for (const card of DEFAULT_DEPT_HEAD_CARDS) {
+  DEFAULT_DEPT_HEAD_CARDS.forEach((card, index) => {
+    assert.equal(card.code, `KARAKTER ${index + 1}`);
     assert.ok(card.title.trim().length > 0);
     assert.ok(card.description.trim().length > 0);
     assert.ok(card.roleHint.trim().length > 0);
-  }
+  });
 });
 
-test("Aturan kuota: 3 kelompok pertama wajib 2 Dept Head, kelompok ke-4 hanya 1 Dept Head", () => {
+test("Aturan kuota: 3 kelompok pertama wajib 2 karakter, kelompok ke-4 hanya 1 karakter", () => {
   assert.equal(getRequiredDeptHeadCount(0), 2);
   assert.equal(getRequiredDeptHeadCount(1), 2);
   assert.equal(getRequiredDeptHeadCount(2), 2);
@@ -70,14 +78,14 @@ test("Aturan kuota: 3 kelompok pertama wajib 2 Dept Head, kelompok ke-4 hanya 1 
     },
   ];
 
-  // Kelompok ke-4 tidak boleh memilih 2 Dept Head
+  // Kelompok ke-4 tidak boleh memilih 2 karakter
   const invalidFourthTwo = validateDeptHeadSelectionInput(4, [7, 8], existingThree);
   assert.equal(invalidFourthTwo.ok, false);
   if (!invalidFourthTwo.ok) {
     assert.equal(invalidFourthTwo.code, "INVALID_CARD_COUNT");
   }
 
-  // Kelompok ke-4 boleh memilih 1 Dept Head
+  // Kelompok ke-4 boleh memilih 1 karakter
   const validFourthOne = validateDeptHeadSelectionInput(4, [7], existingThree);
   assert.equal(validFourthOne.ok, true);
   if (validFourthOne.ok) {
@@ -86,7 +94,7 @@ test("Aturan kuota: 3 kelompok pertama wajib 2 Dept Head, kelompok ke-4 hanya 1 
   }
 });
 
-test("Menolak kartu yang sudah dipilih kelompok lain atau duplikat kelompok", () => {
+test("Menolak karakter yang sudah dipilih tim lain atau duplikat kelompok", () => {
   const existing = [
     {
       id: "s1",
@@ -112,7 +120,51 @@ test("Menolak kartu yang sudah dipilih kelompok lain atau duplikat kelompok", ()
   }
 });
 
-test("Store lokal menjaga urutan pemilihan, kustomisasi siluet, dan reset ulang urutan", () => {
+test("Public snapshot menyamarkan nama kelompok pemilih lain dan menyembunyikan urutan", () => {
+  const full = buildDeptHeadSnapshot(
+    [],
+    [
+      {
+        id: "s1",
+        groupNumber: 1,
+        selectionOrder: 1,
+        requiredCount: 2,
+        cardIds: [1, 5],
+        submittedAt: "2026-11-15T01:00:00.000Z",
+      },
+    ]
+  );
+
+  const publicForGroup2 = buildPublicDeptHeadSnapshot(full, 2);
+  assert.equal(publicForGroup2.group.number, 2);
+  assert.equal(publicForGroup2.mySelection, null);
+  assert.deepEqual(publicForGroup2.takenByOtherCardIds, [1, 5]);
+  assert.equal("selections" in publicForGroup2, false);
+
+  const publicForGroup1 = buildPublicDeptHeadSnapshot(full, 1);
+  assert.deepEqual(publicForGroup1.mySelection?.cardIds, [1, 5]);
+  assert.deepEqual(publicForGroup1.takenByOtherCardIds, []);
+});
+
+test("Autentikasi akun email/password kelompok dan token sesi bekerja sesuai 4 kelompok", () => {
+  const accounts = getDeptHeadAccounts();
+  assert.equal(accounts.length, 4);
+
+  const first = accounts[0];
+  assert.ok(first);
+  const verified = verifyDeptHeadCredentials(first.email.toUpperCase(), first.password);
+  assert.ok(verified);
+  assert.equal(verified.groupNumber, first.groupNumber);
+
+  assert.equal(verifyDeptHeadCredentials(first.email, "password-salah"), null);
+  assert.equal(verifyDeptHeadCredentials("unknown@enigma.id", first.password), null);
+
+  const token = createDeptHeadSessionToken(3);
+  assert.equal(verifyDeptHeadSessionToken(token), 3);
+  assert.equal(verifyDeptHeadSessionToken(`${token}tampered`), null);
+});
+
+test("Store lokal menjaga urutan pemilihan, kustomisasi karakter, normalisasi kode lama, dan reset ulang", () => {
   replaceLocalDeptHeadState([], []);
 
   saveLocalDeptHeadSelection({
@@ -162,16 +214,15 @@ test("Store lokal menjaga urutan pemilihan, kustomisasi siluet, dan reset ulang 
   assert.ok(baseCard);
   upsertLocalDeptHeadCard({
     ...baseCard,
-    title: "Siluet Kustom Kapten",
+    title: "Karakter Kustom Kapten",
     description: "Deskripsi kustom dari admin.",
   });
 
   snapshot = getLocalDeptHeadSnapshot();
   assert.equal(snapshot.totalGroupsSubmitted, 4);
-  assert.equal(snapshot.cards[0]?.title, "Siluet Kustom Kapten");
+  assert.equal(snapshot.cards[0]?.title, "Karakter Kustom Kapten");
   assert.equal(snapshot.takenCardIds[6]?.groupNumber, 2);
 
-  // Menghapus kelompok ke-3 (urutan 1) harus me-repack urutan kelompok tersisa menjadi 1..3
   snapshot = deleteLocalDeptHeadSelection(3);
   assert.equal(snapshot.totalGroupsSubmitted, 3);
   assert.equal(snapshot.nextRequiredCount, 1);
@@ -180,13 +231,16 @@ test("Store lokal menjaga urutan pemilihan, kustomisasi siluet, dan reset ulang 
     [1, 2, 3]
   );
 
-  // Reset semua tidak menghapus kustomisasi kartu siluet
   snapshot = resetAllLocalDeptHeadSelections();
   assert.equal(snapshot.totalGroupsSubmitted, 0);
   assert.equal(snapshot.nextRequiredCount, 2);
-  assert.equal(snapshot.cards[0]?.title, "Siluet Kustom Kapten");
+  assert.equal(snapshot.cards[0]?.title, "Karakter Kustom Kapten");
 
-  const merged = mergeDeptHeadCards([{ id: 2, title: "Override 2" }]);
+  const merged = mergeDeptHeadCards([
+    { id: 1, code: "SILUET 01" },
+    { id: 2, title: "Override 2" },
+  ]);
+  assert.equal(merged[0]?.code, "KARAKTER 1");
   const built = buildDeptHeadSnapshot(merged, []);
   assert.equal(built.cards[1]?.title, "Override 2");
   assert.equal(built.cards.length, 9);

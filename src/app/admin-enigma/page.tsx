@@ -1,7 +1,6 @@
 "use client";
 
-import { AdminDeptHeadPanel } from "@/components/admin-dept-head-panel";
-import type { DeptHeadStateSnapshot } from "@/domain/dept-head";
+import { AdminDeptHeadPanel, type AdminDeptHeadSnapshot } from "@/components/admin-dept-head-panel";
 
 import { useEffect, useState } from "react";
 import { officialGroups } from "@/config/event";
@@ -38,7 +37,7 @@ export default function AdminPage() {
 
   // Active Admin Tab: "quiz" | "attendance" | "catalog" | "dept-head"
   const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head">("quiz");
-  const [deptHeadSnapshot, setDeptHeadSnapshot] = useState<DeptHeadStateSnapshot | null>(null);
+  const [deptHeadSnapshot, setDeptHeadSnapshot] = useState<AdminDeptHeadSnapshot | null>(null);
   const [loadingDeptHead, setLoadingDeptHead] = useState(false);
 
   async function fetchDeptHead() {
@@ -50,7 +49,7 @@ export default function AdminPage() {
         cache: "no-store",
       });
       if (res.ok) {
-        const data = (await res.json()) as DeptHeadStateSnapshot;
+        const data = (await res.json()) as AdminDeptHeadSnapshot;
         setDeptHeadSnapshot(data);
       }
     } catch {

@@ -12,11 +12,23 @@ import {
   type SilhouetteVariant,
 } from "@/domain/dept-head";
 
+export interface AdminDeptHeadAccountInfo {
+  groupNumber: number;
+  groupName: string;
+  groupTitle: string;
+  email: string;
+  password: string;
+}
+
+export type AdminDeptHeadSnapshot = DeptHeadStateSnapshot & {
+  accounts?: AdminDeptHeadAccountInfo[];
+};
+
 interface AdminDeptHeadPanelProps {
-  snapshot: DeptHeadStateSnapshot | null;
+  snapshot: AdminDeptHeadSnapshot | null;
   loading: boolean;
   onRefresh: () => Promise<void>;
-  onSnapshotChange: (snapshot: DeptHeadStateSnapshot) => void;
+  onSnapshotChange: (snapshot: AdminDeptHeadSnapshot) => void;
   getHeaders: () => HeadersInit;
 }
 
@@ -61,6 +73,7 @@ export function AdminDeptHeadPanel({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<number | null>(null);
   const [draftCard, setDraftCard] = useState<DeptHeadCard | null>(null);
+  const [showPasswords, setShowPasswords] = useState(false);
 
   const selectionByGroup = useMemo(() => {
     const map = new Map<number, DeptHeadStateSnapshot["selections"][number]>();
@@ -138,12 +151,15 @@ export function AdminDeptHeadPanel({
       }
 
       if (payload.snapshot) {
-        onSnapshotChange(payload.snapshot);
+        onSnapshotChange({
+          ...payload.snapshot,
+          accounts: snapshot?.accounts,
+        });
       }
       setNotice(`Kartu ${draftCard.code} (${draftCard.title}) berhasil diperbarui.`);
       closeEditor();
     } catch {
-      setErrorMsg("Terjadi kesalahan jaringan saat memperbarui kartu siluet.");
+      setErrorMsg("Terjadi kesalahan jaringan saat memperbarui kartu karakter.");
     } finally {
       setBusyAction(null);
     }
@@ -175,7 +191,10 @@ export function AdminDeptHeadPanel({
         return;
       }
       if (payload.snapshot) {
-        onSnapshotChange(payload.snapshot);
+        onSnapshotChange({
+          ...payload.snapshot,
+          accounts: snapshot?.accounts,
+        });
       }
       setNotice(payload.message || `Pilihan ${groupName} berhasil direset.`);
     } catch {
@@ -188,7 +207,7 @@ export function AdminDeptHeadPanel({
   async function handleResetAll() {
     if (
       !confirm(
-        "PERINGATAN: Kosongkan seluruh pilihan Dept Head untuk semua 4 kelompok? Kartu siluet tetap tersimpan, namun seluruh kelompok harus memilih ulang."
+        "PERINGATAN: Kosongkan seluruh pilihan Dept Head untuk semua 4 kelompok? Kartu karakter tetap tersimpan, namun seluruh kelompok harus memilih ulang."
       )
     ) {
       return;
@@ -215,7 +234,10 @@ export function AdminDeptHeadPanel({
         return;
       }
       if (payload.snapshot) {
-        onSnapshotChange(payload.snapshot);
+        onSnapshotChange({
+          ...payload.snapshot,
+          accounts: snapshot?.accounts,
+        });
       }
       setNotice(payload.message || "Seluruh pilihan Dept Head berhasil dikosongkan.");
     } catch {
@@ -249,10 +271,10 @@ export function AdminDeptHeadPanel({
     <section className="admin-dept-head-section">
       <div className="panel admin-attendance-toolbar">
         <div className="toolbar-info">
-          <h3>Rekap Pilihan Siluet Dept Head Per Kelompok</h3>
+          <h3>Rekap Pilihan Karakter Dept Head Per Kelompok</h3>
           <p>
-            Pantau siluet Dept Head yang dipilih masing-masing kelompok (3 kelompok pertama memilih 2
-            siluet, kelompok ke-4 memilih 1 siluet) serta kelola 9 kartu siluet.
+            Pantau karakter Dept Head yang dipilih masing-masing kelompok (3 kelompok pertama memilih
+            2 karakter, kelompok ke-4 memilih 1 karakter) serta kelola 9 kartu karakter.
           </p>
         </div>
         <div className="toolbar-buttons-cluster">
@@ -352,7 +374,7 @@ export function AdminDeptHeadPanel({
               ) : (
                 <div className="admin-dept-empty-group">
                   <Icon name="clock" size={20} />
-                  <span>Kelompok ini belum mengirim pilihan siluet Dept Head.</span>
+                  <span>Kelompok ini belum mengirim pilihan karakter Dept Head.</span>
                 </div>
               )}
             </article>
@@ -360,17 +382,55 @@ export function AdminDeptHeadPanel({
         })}
       </div>
 
+      {snapshot.accounts && snapshot.accounts.length > 0 && (
+        <div className="panel admin-dept-cards-manager">
+          <div className="admin-dept-manager-header">
+            <div>
+              <h3>Akun Login Kelompok (Halaman Pemilihan Dept Head)</h3>
+              <p>
+                Bagikan email &amp; password berikut ke perwakilan masing-masing kelompok. Satu
+                kelompok menggunakan satu akun khusus untuk memilih karakter.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn-admin-action"
+              onClick={() => setShowPasswords((v) => !v)}
+            >
+              <Icon name="lock" size={14} />
+              <span>{showPasswords ? "Sembunyikan Password" : "Tampilkan Password"}</span>
+            </button>
+          </div>
+
+          <div className="admin-accounts-grid">
+            {snapshot.accounts.map((acc) => (
+              <div key={acc.groupNumber} className="admin-account-item">
+                <span className="eyebrow">{acc.groupTitle}</span>
+                <div className="admin-account-row">
+                  <span>Email:</span>
+                  <code>{acc.email}</code>
+                </div>
+                <div className="admin-account-row">
+                  <span>Password:</span>
+                  <code>{showPasswords ? acc.password : "••••••••••"}</code>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="panel admin-dept-cards-manager">
         <div className="admin-dept-manager-header">
           <div>
-            <h3>Kelola 9 Kartu Siluet &amp; Deskripsi</h3>
+            <h3>Kelola 9 Kartu Karakter &amp; Deskripsi</h3>
             <p>
-              Ubah judul, petunjuk peran, deskripsi siluet, variasi ilustrasi, atau unggah gambar siluet
-              kustom kapan saja.
+              Ubah kode, judul, petunjuk peran, deskripsi karakter, variasi visual, atau unggah
+              gambar karakter kustom kapan saja.
             </p>
           </div>
           <span className="status-chip">
-            Terpilih: {Object.keys(snapshot.takenCardIds).length} / {snapshot.cards.length} Siluet
+            Terpilih: {Object.keys(snapshot.takenCardIds).length} / {snapshot.cards.length} Karakter
           </span>
         </div>
 
@@ -402,7 +462,7 @@ export function AdminDeptHeadPanel({
                     </div>
 
                     <div className="form-field-group">
-                      <label className="field-label">Judul Siluet</label>
+                      <label className="field-label">Judul Karakter</label>
                       <input
                         type="text"
                         className="quiz-input"
@@ -424,7 +484,7 @@ export function AdminDeptHeadPanel({
                     </div>
 
                     <div className="form-field-group">
-                      <label className="field-label">Deskripsi Siluet</label>
+                      <label className="field-label">Deskripsi Karakter</label>
                       <textarea
                         rows={3}
                         className="quiz-input"
@@ -525,7 +585,7 @@ export function AdminDeptHeadPanel({
                       onClick={() => openEditor(card)}
                     >
                       <Icon name="sparkles" size={14} />
-                      <span>Edit Siluet &amp; Deskripsi</span>
+                      <span>Edit Karakter &amp; Deskripsi</span>
                     </button>
                   </>
                 )}

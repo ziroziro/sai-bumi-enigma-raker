@@ -1,4 +1,5 @@
 import { updateDeptHeadCardSchema } from "@/domain/dept-head";
+import { getDeptHeadAccounts } from "@/server/dept-head-auth";
 import {
   deleteDeptHeadSelection,
   DeptHeadServiceError,
@@ -34,11 +35,15 @@ export async function GET(request: Request) {
 
   try {
     const snapshot = await getDeptHeadSnapshot();
-    return Response.json(snapshot, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-      },
-    });
+    const accounts = getDeptHeadAccounts();
+    return Response.json(
+      { ...snapshot, accounts },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gagal memuat data pemilihan Dept Head.";
     return Response.json({ error: message }, { status: 500 });

@@ -3,71 +3,67 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { SilhouetteArt } from "@/components/silhouette-art";
-import { formatRegistrationTime, officialGroups } from "@/config/event";
-import type { DeptHeadCard, DeptHeadStateSnapshot } from "@/domain/dept-head";
+import { formatRegistrationTime } from "@/config/event";
+import type { DeptHeadCard, PublicDeptHeadSnapshot } from "@/domain/dept-head";
 
 interface DeptHeadAppProps {
-  initialSnapshot: DeptHeadStateSnapshot;
+  initialSnapshot: PublicDeptHeadSnapshot | null;
 }
 
 export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
-  const [snapshot, setSnapshot] = useState<DeptHeadStateSnapshot>(initialSnapshot);
-  const [selectedGroupNumber, setSelectedGroupNumber] = useState<number | null>(null);
+  const [snapshot, setSnapshot] = useState<PublicDeptHeadSnapshot | null>(initialSnapshot);
+  const [emailInput, setEmailInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const [selectedCardIds, setSelectedCardIds] = useState<number[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const selectionByGroup = useMemo(() => {
-    const map = new Map<number, DeptHeadStateSnapshot["selections"][number]>();
-    for (const item of snapshot.selections) {
-      map.set(item.groupNumber, item);
-    }
-    return map;
-  }, [snapshot.selections]);
-
   const cardById = useMemo(() => {
     const map = new Map<number, DeptHeadCard>();
-    for (const card of snapshot.cards) {
+    for (const card of snapshot?.cards ?? []) {
       map.set(card.id, card);
     }
     return map;
-  }, [snapshot.cards]);
+  }, [snapshot]);
 
-  const selectedGroupMeta = useMemo(
-    () => officialGroups.find((g) => g.number === selectedGroupNumber) ?? null,
-    [selectedGroupNumber]
+  const takenByOtherSet = useMemo(
+    () => new Set<number>(snapshot?.takenByOtherCardIds ?? []),
+    [snapshot]
   );
-
-  const existingGroupSelection = useMemo(
-    () => (selectedGroupNumber ? selectionByGroup.get(selectedGroupNumber) ?? null : null),
-    [selectedGroupNumber, selectionByGroup]
-  );
-
-  const requiredCount = snapshot.nextRequiredCount;
-  const availableCardsCount = snapshot.cards.length - Object.keys(snapshot.takenCardIds).length;
-  const nextOrder = Math.min(snapshot.maxGroups, snapshot.totalGroupsSubmitted + 1);
-  const isAllSubmitted = snapshot.totalGroupsSubmitted >= snapshot.maxGroups;
 
   const refreshSnapshot = useCallback(async () => {
+    if (!snapshot) return;
     setRefreshing(true);
     try {
-      const response = await fetch("/api/dept-head", { cache: "no-store" });
+      const response = await fetch("/api/dept-head", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (response.status === 401) {
+        setSnapshot(null);
+        setSelectedCardIds([]);
+        return;
+      }
       if (!response.ok) return;
-      const latest = (await response.json()) as DeptHeadStateSnapshot;
+      const latest = (await response.json()) as PublicDeptHeadSnapshot;
       setSnapshot(latest);
 
-      // Remove any drafted card IDs that were claimed by another group while user was choosing
-      setSelectedCardIds((prev) => prev.filter((id) => !latest.takenCardIds[id]));
+      const takenSet = new Set(latest.takenByOtherCardIds);
+      setSelectedCardIds((prev) => prev.filter((id) => !takenSet.has(id)));
     } catch {
       // keep current state cleanly on transient network issues
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [snapshot]);
 
   useEffect(() => {
+    if (!snapshot) return;
     const onFocus = () => {
       void refreshSnapshot();
     };
@@ -82,27 +78,70 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [refreshSnapshot]);
+  }, [snapshot, refreshSnapshot]);
 
-  function handleSelectGroup(groupNumber: number) {
-    setSelectedGroupNumber(groupNumber);
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoggingIn(true);
+    setLoginError(null);
+
+    try {
+      const response = await fetch("/api/dept-head/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: emailInput.trim(),
+          password: passwordInput,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        snapshot?: PublicDeptHeadSnapshot;
+      };
+
+      if (!response.ok || !payload.snapshot) {
+        setLoginError(payload.error || "Email atau password akun kelompok tidak valid.");
+        return;
+      }
+
+      setSnapshot(payload.snapshot);
+      setSelectedCardIds([]);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      setPasswordInput("");
+    } catch {
+      setLoginError("Gagal menghubungi server untuk masuk ke akun kelompok.");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/dept-head/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // ignore
+    }
+    setSnapshot(null);
     setSelectedCardIds([]);
     setErrorMessage(null);
     setSuccessMessage(null);
   }
 
   function handleToggleCard(cardId: number) {
-    if (!selectedGroupNumber || existingGroupSelection || isAllSubmitted || submitting) {
-      return;
-    }
-
-    if (snapshot.takenCardIds[cardId]) {
-      return;
-    }
+    if (!snapshot || snapshot.mySelection || submitting) return;
+    if (snapshot.totalGroupsSubmitted >= snapshot.maxGroups) return;
+    if (takenByOtherSet.has(cardId)) return;
 
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const requiredCount = snapshot.requiredCount;
     setSelectedCardIds((prev) => {
       if (prev.includes(cardId)) {
         return prev.filter((id) => id !== cardId);
@@ -112,7 +151,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
       }
       if (prev.length >= requiredCount) {
         setErrorMessage(
-          `Kuota saat ini maksimal ${requiredCount} pilihan Dept Head. Batalkan salah satu siluet yang dipilih terlebih dahulu.`
+          `Kuota pemilihan saat ini adalah ${requiredCount} karakter. Batalkan salah satu karakter terlebih dahulu untuk mengganti pilihan.`
         );
         return prev;
       }
@@ -122,13 +161,11 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedGroupNumber || existingGroupSelection) return;
+    if (!snapshot || snapshot.mySelection) return;
 
-    if (selectedCardIds.length !== requiredCount) {
+    if (selectedCardIds.length !== snapshot.requiredCount) {
       setErrorMessage(
-        requiredCount === 1
-          ? "Kelompok terakhir harus memilih tepat 1 siluet Dept Head."
-          : `Silakan pilih tepat ${requiredCount} siluet Dept Head sebelum menyimpan.`
+        `Silakan pilih tepat ${snapshot.requiredCount} karakter sebelum menyimpan.`
       );
       return;
     }
@@ -141,21 +178,25 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
       const response = await fetch("/api/dept-head", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
-          groupNumber: selectedGroupNumber,
           cardIds: selectedCardIds,
         }),
       });
 
       const payload = (await response.json()) as {
         error?: string;
-        code?: string;
-        snapshot?: DeptHeadStateSnapshot;
-        record?: DeptHeadStateSnapshot["selections"][number];
+        snapshot?: PublicDeptHeadSnapshot;
       };
 
+      if (response.status === 401) {
+        setSnapshot(null);
+        setLoginError(payload.error || "Sesi login telah berakhir. Silakan login kembali.");
+        return;
+      }
+
       if (!response.ok) {
-        setErrorMessage(payload.error || "Gagal menyimpan pilihan Dept Head.");
+        setErrorMessage(payload.error || "Gagal menyimpan pilihan karakter.");
         await refreshSnapshot();
         return;
       }
@@ -167,7 +208,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
       }
       setSelectedCardIds([]);
       setSuccessMessage(
-        `Pilihan Dept Head untuk ${selectedGroupMeta?.title ?? `Kelompok ${selectedGroupNumber}`} berhasil dikunci ke database!`
+        `Pilihan karakter untuk ${snapshot.group.title} berhasil dikunci ke database!`
       );
     } catch {
       setErrorMessage("Terjadi kesalahan jaringan. Silakan muat ulang status lalu coba kembali.");
@@ -176,30 +217,118 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     }
   }
 
+  if (!snapshot) {
+    return (
+      <div className="dept-login-wrapper">
+        <div className="panel dept-login-card">
+          <div className="admin-brand-header">
+            <span className="brand-mark">
+              <Icon name="shield" size={24} />
+            </span>
+            <div>
+              <span className="eyebrow">AKSES KELOMPOK TERBATAS</span>
+              <h1>Login Pemilihan Karakter</h1>
+            </div>
+          </div>
+
+          <p className="dept-login-desc">
+            Gunakan email dan password resmi kelompok Anda untuk masuk ke halaman pemilihan karakter
+            Department Head. Setiap kelompok hanya menggunakan satu akun login.
+          </p>
+
+          <form onSubmit={handleLogin} className="admin-form">
+            <div className="form-field-group">
+              <label htmlFor="dept-login-email" className="field-label">
+                Email Kelompok
+              </label>
+              <input
+                id="dept-login-email"
+                type="email"
+                className="quiz-input"
+                placeholder="contoh: lupin@enigma.id"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="form-field-group">
+              <label htmlFor="dept-login-password" className="field-label">
+                Password Kelompok
+              </label>
+              <input
+                id="dept-login-password"
+                type="password"
+                className="quiz-input"
+                placeholder="Masukkan password kelompok..."
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                required
+              />
+            </div>
+
+            {loginError && (
+              <div className="notice error-notice" role="alert">
+                <Icon name="close" size={16} />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="btn-primary-link btn-submit-admin"
+              disabled={loggingIn || !emailInput.trim() || !passwordInput}
+            >
+              <span>{loggingIn ? "Memeriksa Akun..." : "Masuk Halaman Pemilihan"}</span>
+              <Icon name="arrow" size={18} />
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const availableCardsCount =
+    snapshot.cards.length -
+    snapshot.takenByOtherCardIds.length -
+    (snapshot.mySelection?.cardIds.length ?? 0);
+  const isAllSubmitted = snapshot.totalGroupsSubmitted >= snapshot.maxGroups;
+  const hasSubmitted = Boolean(snapshot.mySelection);
+
   return (
     <div className="page-shell dept-head-shell">
       <section className="panel dept-head-hero">
         <div className="dept-head-hero-head">
           <div>
             <span className="eyebrow">
-              <Icon name="shield" size={14} /> MISI PENENTUAN PIMPINAN KELOMPOK
+              <Icon name="shield" size={14} /> AKUN AKTIF · {snapshot.group.title.toUpperCase()}
             </span>
-            <h1 className="dept-head-title">Pemilihan Department Head</h1>
+            <h1 className="dept-head-title">Pemilihan Karakter Dept Head</h1>
             <p className="dept-head-subtitle">
-              Pilih kelompok Anda terlebih dahulu, lalu amati 9 siluet misterius beserta petunjuk karakternya.
-              Tiga kelompok pertama yang melakukan submit dapat memilih <strong>2 Dept Head</strong>,
-              sedangkan kelompok yang memilih terakhir hanya dapat memilih <strong>1 Dept Head</strong>.
+              Amati 9 kartu karakter beserta petunjuk sifatnya, lalu tentukan karakter Department Head
+              yang paling tepat untuk tim Anda. Karakter yang telah dipilih tim lain otomatis dikunci.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn-refresh-dept-head"
-            onClick={() => void refreshSnapshot()}
-            disabled={refreshing}
-          >
-            <Icon name="refresh" size={16} />
-            <span>{refreshing ? "Menyegarkan..." : "Segarkan Status"}</span>
-          </button>
+          <div className="dept-hero-actions">
+            <button
+              type="button"
+              className="btn-refresh-dept-head"
+              onClick={() => void refreshSnapshot()}
+              disabled={refreshing}
+            >
+              <Icon name="refresh" size={16} />
+              <span>{refreshing ? "Menyegarkan..." : "Segarkan"}</span>
+            </button>
+            <button
+              type="button"
+              className="btn-refresh-dept-head is-logout"
+              onClick={() => void handleLogout()}
+            >
+              <Icon name="close" size={16} />
+              <span>Keluar Akun</span>
+            </button>
+          </div>
         </div>
 
         <div className="dept-head-metrics">
@@ -210,216 +339,169 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
             </strong>
           </div>
           <div className="dept-metric-pill">
-            <span className="metric-label">Siluet Tersisa</span>
+            <span className="metric-label">Karakter Tersedia</span>
             <strong className="metric-value">
-              {availableCardsCount} / {snapshot.cards.length} Kartu
+              {Math.max(0, availableCardsCount)} / {snapshot.cards.length} Karakter
             </strong>
           </div>
-          <div className={`dept-metric-pill ${requiredCount === 1 && !isAllSubmitted ? "is-final-slot" : ""}`}>
-            <span className="metric-label">Aturan Kuota Saat Ini</span>
+          <div className={`dept-metric-pill ${snapshot.requiredCount === 1 && !hasSubmitted ? "is-final-slot" : ""}`}>
+            <span className="metric-label">Kuota Pemilihan Tim Anda</span>
             <strong className="metric-value">
-              {isAllSubmitted
-                ? "Semua Kelompok Selesai"
-                : requiredCount === 1
-                  ? `Urutan Ke-4 (Terakhir): Maks 1 Dept Head`
-                  : `Urutan Ke-${nextOrder}: Pilih 2 Dept Head`}
+              {hasSubmitted
+                ? `Terkunci · ${snapshot.mySelection?.cardIds.length ?? 0} Karakter Terpilih`
+                : isAllSubmitted
+                  ? "Semua Kelompok Selesai"
+                  : `Pilih ${snapshot.requiredCount} Karakter`}
             </strong>
           </div>
         </div>
       </section>
 
-      <section className="panel dept-head-step-panel">
+      <form onSubmit={handleSubmit} className="panel dept-head-step-panel">
         <div className="dept-step-header">
-          <span className="step-pill">LANGKAH 1</span>
-          <div>
-            <h2 className="dept-step-heading">Pilih Nama Kelompok Anda</h2>
-            <p className="section-caption">
-              Setiap kelompok hanya dapat mengirim satu kali. Kartu siluet yang sudah diklaim tidak dapat dipilih kelompok lain.
-            </p>
+          <span className="step-pill">PROFIL KARAKTER</span>
+          <div className="dept-step-title-wrap">
+            <h2 className="dept-step-heading">
+              Pilih Kartu Karakter — {snapshot.group.title}
+            </h2>
+            {snapshot.mySelection ? (
+              <p className="section-caption is-confirmed-text">
+                Pilihan tim Anda telah dikunci pada {formatRegistrationTime(snapshot.mySelection.submittedAt)}.
+              </p>
+            ) : (
+              <p className="section-caption">
+                Silakan pilih tepat{" "}
+                <strong>
+                  {snapshot.requiredCount} karakter
+                </strong>{" "}
+                yang mewakili kebutuhan tim Anda.
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="dept-group-grid">
-          {officialGroups.map((group) => {
-            const submitted = selectionByGroup.get(group.number);
-            const isSelected = selectedGroupNumber === group.number;
+        {snapshot.mySelection && (
+          <div className="notice success-notice dept-head-notice" role="status">
+            <Icon name="check" size={18} />
+            <div>
+              <strong>Pilihan Karakter Sudah Tersimpan</strong>
+              <p>
+                {snapshot.group.title} telah memilih:{" "}
+                {snapshot.mySelection.cardIds
+                  .map((id) => {
+                    const c = cardById.get(id);
+                    return c ? `${c.code} (${c.title})` : `Karakter ${id}`;
+                  })
+                  .join(" & ")}
+                . Hubungi panitia di Admin Enigma apabila diperlukan reset.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {successMessage && !snapshot.mySelection && (
+          <div className="notice success-notice dept-head-notice" role="status">
+            <Icon name="check" size={18} />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {errorMessage && (
+          <div className="notice error-notice dept-head-notice" role="alert">
+            <Icon name="close" size={18} />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        <div className="silhouette-grid">
+          {snapshot.cards.map((card) => {
+            const isOwnedByCurrentGroup = Boolean(snapshot.mySelection?.cardIds.includes(card.id));
+            const isTakenByOther = !isOwnedByCurrentGroup && takenByOtherSet.has(card.id);
+            const isDraftSelected = selectedCardIds.includes(card.id);
+            const isDisabled = hasSubmitted || isTakenByOther || isAllSubmitted || submitting;
+
             return (
               <button
-                key={group.number}
+                key={card.id}
                 type="button"
-                onClick={() => handleSelectGroup(group.number)}
-                className={`dept-group-card ${isSelected ? "is-selected" : ""} ${submitted ? "is-submitted" : ""}`}
+                disabled={isDisabled}
+                onClick={() => handleToggleCard(card.id)}
+                className={`silhouette-card ${isDraftSelected ? "is-selected" : ""} ${
+                  isOwnedByCurrentGroup ? "is-owned" : ""
+                } ${isTakenByOther ? "is-taken" : ""}`}
               >
-                <div className="dept-group-card-top">
-                  <span className="dept-group-number">Kelompok {group.number}</span>
-                  <span className={`dept-group-badge ${submitted ? "is-done" : "is-open"}`}>
-                    {submitted ? `Urutan #${submitted.selectionOrder}` : "Belum Submit"}
-                  </span>
+                <div className="silhouette-card-header">
+                  <span className="silhouette-code">{card.code}</span>
+                  {isOwnedByCurrentGroup ? (
+                    <span className="silhouette-status-pill is-owned">
+                      <Icon name="check" size={13} /> Pilihan Tim Anda
+                    </span>
+                  ) : isTakenByOther ? (
+                    <span className="silhouette-status-pill is-taken">
+                      <Icon name="lock" size={13} /> Karakter Sudah Dipilih
+                    </span>
+                  ) : isDraftSelected ? (
+                    <span className="silhouette-status-pill is-selected">
+                      <Icon name="check" size={13} /> Terpilih
+                    </span>
+                  ) : (
+                    <span className="silhouette-status-pill is-available">Tersedia</span>
+                  )}
                 </div>
-                <strong className="dept-group-name">{group.name}</strong>
-                <span className="dept-group-meta">
-                  {submitted
-                    ? `Sudah memilih ${submitted.cardIds.length} Dept Head`
-                    : isAllSubmitted
-                      ? "Seluruh kuota kelompok telah terisi"
-                      : "Klik untuk lanjut memilih siluet"}
-                </span>
+
+                <SilhouetteArt
+                  variant={card.silhouetteVariant}
+                  customImageUrl={card.customImageUrl}
+                  alt={`${card.code} - ${card.title}`}
+                />
+
+                <div className="silhouette-card-body">
+                  <h3 className="silhouette-title">{card.title}</h3>
+                  <span className="silhouette-role-hint">{card.roleHint}</span>
+                  <p className="silhouette-desc">{card.description}</p>
+                </div>
               </button>
             );
           })}
         </div>
-      </section>
 
-      {selectedGroupMeta && (
-        <form onSubmit={handleSubmit} className="panel dept-head-step-panel">
-          <div className="dept-step-header">
-            <span className="step-pill">LANGKAH 2</span>
-            <div className="dept-step-title-wrap">
-              <h2 className="dept-step-heading">
-                Pilih Kartu Siluet Dept Head — {selectedGroupMeta.title}
-              </h2>
-              {existingGroupSelection ? (
-                <p className="section-caption is-confirmed-text">
-                  Kelompok ini sudah mengunci {existingGroupSelection.cardIds.length} siluet Dept Head sebagai kelompok ke-{existingGroupSelection.selectionOrder} pada{" "}
-                  {formatRegistrationTime(existingGroupSelection.submittedAt)}.
-                </p>
+        {!hasSubmitted && !isAllSubmitted && (
+          <div className="dept-submit-bar">
+            <div className="dept-submit-summary">
+              <span className="summary-label">
+                Karakter Dipilih ({selectedCardIds.length}/{snapshot.requiredCount}):
+              </span>
+              {selectedCardIds.length === 0 ? (
+                <span className="summary-empty">Belum ada kartu karakter yang dipilih.</span>
               ) : (
-                <p className="section-caption">
-                  Status giliran Anda sekarang:{" "}
-                  <strong>
-                    Urutan ke-{nextOrder} dari {snapshot.maxGroups} kelompok
-                  </strong>{" "}
-                  → Wajib memilih tepat{" "}
-                  <strong>
-                    {requiredCount} {requiredCount === 1 ? "Dept Head (kuota terakhir)" : "Dept Head"}
-                  </strong>
-                  .
-                </p>
+                <div className="summary-chips">
+                  {selectedCardIds.map((id) => {
+                    const chosen = cardById.get(id);
+                    return (
+                      <span key={id} className="summary-chip">
+                        {chosen?.code || `KARAKTER ${id}`} — {chosen?.title || "Karakter"}
+                      </span>
+                    );
+                  })}
+                </div>
               )}
             </div>
+
+            <button
+              type="submit"
+              className="btn-primary-link btn-dept-submit"
+              disabled={submitting || selectedCardIds.length !== snapshot.requiredCount}
+            >
+              <span>
+                {submitting
+                  ? "Menyimpan Pilihan..."
+                  : `Submit Pilihan (${selectedCardIds.length}/${snapshot.requiredCount})`}
+              </span>
+              <Icon name="arrow" size={18} />
+            </button>
           </div>
-
-          {existingGroupSelection && (
-            <div className="notice success-notice dept-head-notice" role="status">
-              <Icon name="check" size={18} />
-              <div>
-                <strong>Pilihan Kelompok Sudah Tersimpan</strong>
-                <p>
-                  {selectedGroupMeta.title} telah memilih:{" "}
-                  {existingGroupSelection.cardIds
-                    .map((id) => cardById.get(id)?.title || `Siluet #${id}`)
-                    .join(" & ")}
-                  . Jika ada kesalahan, hubungi panitia di Admin Enigma untuk reset.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {successMessage && !existingGroupSelection && (
-            <div className="notice success-notice dept-head-notice" role="status">
-              <Icon name="check" size={18} />
-              <span>{successMessage}</span>
-            </div>
-          )}
-
-          {errorMessage && (
-            <div className="notice error-notice dept-head-notice" role="alert">
-              <Icon name="close" size={18} />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          <div className="silhouette-grid">
-            {snapshot.cards.map((card) => {
-              const owner = snapshot.takenCardIds[card.id];
-              const isOwnedByCurrentGroup =
-                Boolean(existingGroupSelection?.cardIds.includes(card.id)) ||
-                owner?.groupNumber === selectedGroupMeta.number;
-              const isTakenByOther = Boolean(owner && owner.groupNumber !== selectedGroupMeta.number);
-              const isDraftSelected = selectedCardIds.includes(card.id);
-              const isDisabled = Boolean(existingGroupSelection) || isTakenByOther || isAllSubmitted || submitting;
-
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  disabled={isDisabled}
-                  onClick={() => handleToggleCard(card.id)}
-                  className={`silhouette-card ${isDraftSelected ? "is-selected" : ""} ${
-                    isOwnedByCurrentGroup ? "is-owned" : ""
-                  } ${isTakenByOther ? "is-taken" : ""}`}
-                >
-                  <div className="silhouette-card-header">
-                    <span className="silhouette-code">{card.code}</span>
-                    {isOwnedByCurrentGroup ? (
-                      <span className="silhouette-status-pill is-owned">
-                        <Icon name="check" size={13} /> Pilihan Tim Ini
-                      </span>
-                    ) : isTakenByOther && owner ? (
-                      <span className="silhouette-status-pill is-taken">
-                        <Icon name="lock" size={13} /> Dipilih {owner.groupName}
-                      </span>
-                    ) : isDraftSelected ? (
-                      <span className="silhouette-status-pill is-selected">
-                        <Icon name="check" size={13} /> Terpilih
-                      </span>
-                    ) : (
-                      <span className="silhouette-status-pill is-available">Tersedia</span>
-                    )}
-                  </div>
-
-                  <SilhouetteArt
-                    variant={card.silhouetteVariant}
-                    customImageUrl={card.customImageUrl}
-                    alt={`${card.code} - ${card.title}`}
-                  />
-
-                  <div className="silhouette-card-body">
-                    <h3 className="silhouette-title">{card.title}</h3>
-                    <span className="silhouette-role-hint">{card.roleHint}</span>
-                    <p className="silhouette-desc">{card.description}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {!existingGroupSelection && !isAllSubmitted && (
-            <div className="dept-submit-bar">
-              <div className="dept-submit-summary">
-                <span className="summary-label">Siluet Dipilih ({selectedCardIds.length}/{requiredCount}):</span>
-                {selectedCardIds.length === 0 ? (
-                  <span className="summary-empty">Belum ada kartu siluet yang dipilih.</span>
-                ) : (
-                  <div className="summary-chips">
-                    {selectedCardIds.map((id) => {
-                      const chosen = cardById.get(id);
-                      return (
-                        <span key={id} className="summary-chip">
-                          {chosen?.code || `#${id}`} — {chosen?.title || "Siluet"}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="btn-primary-link btn-dept-submit"
-                disabled={submitting || selectedCardIds.length !== requiredCount}
-              >
-                <span>
-                  {submitting
-                    ? "Menyimpan Pilihan..."
-                    : `Submit Pilihan (${selectedCardIds.length}/${requiredCount})`}
-                </span>
-                <Icon name="arrow" size={18} />
-              </button>
-            </div>
-          )}
-        </form>
-      )}
+        )}
+      </form>
     </div>
   );
 }
