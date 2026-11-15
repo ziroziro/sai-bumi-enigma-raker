@@ -1,19 +1,19 @@
-import { DEPT_HEAD_ANNOUNCEMENT_LABEL, submitDeptHeadSchema } from "@/domain/dept-head";
-import { DEPT_HEAD_COOKIE_NAME, getDeptHeadGroupFromRequest } from "@/server/dept-head-auth";
+import { getGroupTitle } from "@/config/event";
+import {
+  buildLockedDeptHeadView,
+  buildPublicDeptHeadSnapshot,
+  DEPT_HEAD_ANNOUNCEMENT_LABEL,
+  submitDeptHeadSchema,
+} from "@/domain/dept-head";
+import { getDeptHeadGroupFromRequest } from "@/server/dept-head-auth";
 import {
   DeptHeadServiceError,
-  getPublicDeptHeadSnapshot,
+  getDeptHeadSnapshot,
   submitDeptHeadSelection,
 } from "@/server/dept-head-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function buildClearCookieHeader(): string {
-  return `${DEPT_HEAD_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:01 GMT${
-    process.env.NODE_ENV === "production" ? "; Secure" : ""
-  }`;
-}
 
 export async function GET(request: Request) {
   const groupNumber = getDeptHeadGroupFromRequest(request);
@@ -25,20 +25,23 @@ export async function GET(request: Request) {
   }
 
   try {
-    const snapshot = await getPublicDeptHeadSnapshot(groupNumber);
-    if (snapshot.mySelection) {
-      const response = Response.json(
+    const fullSnapshot = await getDeptHeadSnapshot();
+    const publicSnapshot = buildPublicDeptHeadSnapshot(fullSnapshot, groupNumber);
+    if (publicSnapshot.mySelection) {
+      return Response.json(
         {
-          error: "Akun kelompok ini sudah menyelesaikan pemilihan dan otomatis ter-logout.",
-          code: "GROUP_ALREADY_SUBMITTED",
+          alreadySubmitted: true,
+          lockedView: buildLockedDeptHeadView(fullSnapshot, groupNumber),
         },
-        { status: 401 }
+        {
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
       );
-      response.headers.set("Set-Cookie", buildClearCookieHeader());
-      return response;
     }
 
-    return Response.json(snapshot, {
+    return Response.json(publicSnapshot, {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
       },
@@ -71,19 +74,17 @@ export async function POST(request: Request) {
       );
     }
 
-    await submitDeptHeadSelection(groupNumber, parsed.data.cardIds);
+    const result = await submitDeptHeadSelection(groupNumber, parsed.data.cardIds);
+    const lockedView = buildLockedDeptHeadView(result.snapshot, groupNumber);
 
-    // Otomatis logout akun kelompok setelah berhasil submit pilihan Dept Head
-    const response = Response.json(
+    return Response.json(
       {
         success: true,
-        loggedOut: true,
-        message: `Pilihan Dept Head berhasil disimpan dan akun otomatis keluar. ${DEPT_HEAD_ANNOUNCEMENT_LABEL}`,
+        message: `Terima kasih! Submit pilihan untuk ${getGroupTitle(groupNumber)} berhasil. ${DEPT_HEAD_ANNOUNCEMENT_LABEL}`,
+        lockedView,
       },
       { status: 201 }
     );
-    response.headers.set("Set-Cookie", buildClearCookieHeader());
-    return response;
   } catch (error) {
     if (error instanceof DeptHeadServiceError) {
       return Response.json({ error: error.message, code: error.code }, { status: error.status });

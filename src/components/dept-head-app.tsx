@@ -13,11 +13,15 @@ import {
 
 interface DeptHeadAppProps {
   initialSnapshot: PublicDeptHeadSnapshot | null;
+  initialLockedView?: LockedDeptHeadView | null;
 }
 
-export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
+export function DeptHeadApp({
+  initialSnapshot,
+  initialLockedView = null,
+}: DeptHeadAppProps) {
   const [snapshot, setSnapshot] = useState<PublicDeptHeadSnapshot | null>(initialSnapshot);
-  const [lockedView, setLockedView] = useState<LockedDeptHeadView | null>(null);
+  const [lockedView, setLockedView] = useState<LockedDeptHeadView | null>(initialLockedView);
   const [postSubmitNotice, setPostSubmitNotice] = useState<string | null>(null);
 
   const [emailInput, setEmailInput] = useState("");
@@ -57,10 +61,21 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
         return;
       }
       if (!response.ok) return;
-      const latest = (await response.json()) as PublicDeptHeadSnapshot;
-      setSnapshot(latest);
+      const latest = (await response.json()) as
+        | PublicDeptHeadSnapshot
+        | { alreadySubmitted: true; lockedView?: LockedDeptHeadView };
 
-      const takenSet = new Set(latest.takenByOtherCardIds);
+      if ("alreadySubmitted" in latest && latest.alreadySubmitted && latest.lockedView) {
+        setSnapshot(null);
+        setLockedView(latest.lockedView);
+        setSelectedCardIds([]);
+        return;
+      }
+
+      const publicLatest = latest as PublicDeptHeadSnapshot;
+      setSnapshot(publicLatest);
+
+      const takenSet = new Set(publicLatest.takenByOtherCardIds);
       setSelectedCardIds((prev) => prev.filter((id) => !takenSet.has(id)));
     } catch {
       // keep current state cleanly on transient network issues
@@ -152,6 +167,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     }
     setSnapshot(null);
     setLockedView(null);
+    setPostSubmitNotice(null);
     setSelectedCardIds([]);
     setErrorMessage(null);
   }
@@ -207,8 +223,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
       const payload = (await response.json()) as {
         error?: string;
-        loggedOut?: boolean;
         message?: string;
+        lockedView?: LockedDeptHeadView | null;
       };
 
       if (response.status === 401) {
@@ -223,16 +239,24 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
         return;
       }
 
-      // Otomatis logout setelah berhasil submit pilihan karakter Dept Head
+      // Tidak langsung logout: tampilkan kartu pilihan kelompok beserta ucapan terima kasih
       const submittedGroupTitle = snapshot.group.title;
+      const fallbackSelectedCards = selectedCardIds
+        .map((id) => cardById.get(id))
+        .filter((card): card is DeptHeadCard => Boolean(card));
+      const nextLockedView: LockedDeptHeadView = payload.lockedView ?? {
+        group: snapshot.group,
+        selectedCards: fallbackSelectedCards,
+        submittedAt: new Date().toISOString(),
+        announcementDateLabel: DEPT_HEAD_ANNOUNCEMENT_LABEL,
+      };
+
       setSnapshot(null);
-      setLockedView(null);
+      setLockedView(nextLockedView);
       setSelectedCardIds([]);
-      setEmailInput("");
-      setPasswordInput("");
       setLoginError(null);
       setPostSubmitNotice(
-        `Pilihan karakter untuk ${submittedGroupTitle} berhasil dikunci dan akun otomatis keluar. ${DEPT_HEAD_ANNOUNCEMENT_LABEL}`
+        `Terima kasih! Submit pilihan karakter untuk ${submittedGroupTitle} berhasil disimpan.`
       );
     } catch {
       setErrorMessage("Terjadi kesalahan jaringan. Silakan muat ulang status lalu coba kembali.");
@@ -241,7 +265,7 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
     }
   }
 
-  // TAMPILAN KHUSUS JIKA AKUN SUDAH PERNAH SUBMIT & MENCOBA LOGIN LAGI
+  // TAMPILAN KARTU PILIHAN KELOMPOK (SETELAH SUBMIT ATAU SAAT LOGIN ULANG)
   if (lockedView) {
     return (
       <div className="page-shell dept-head-shell">
@@ -249,29 +273,31 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
           <div className="dept-head-hero-head">
             <div>
               <span className="eyebrow">
-                <Icon name="lock" size={14} /> AKUN TERKUNCI · {lockedView.group.title.toUpperCase()}
+                <Icon name="check" size={14} /> PILIHAN TERSIMPAN · {lockedView.group.title.toUpperCase()}
               </span>
-              <h1 className="dept-head-title">Pilihan Dept Head Telah Terkunci</h1>
+              <h1 className="dept-head-title">Terima Kasih, Pilihan Anda Tersimpan</h1>
               <p className="dept-head-subtitle">
-                Akun <strong>{lockedView.group.title}</strong> sudah mengirimkan pilihan pada{" "}
-                {formatRegistrationTime(lockedView.submittedAt)} dan{" "}
-                <strong>tidak dapat login ulang untuk mengubah pilihan</strong>. Di bawah ini adalah
-                kartu karakter yang telah dipilih oleh tim Anda.
+                Terima kasih, <strong>{lockedView.group.title}</strong> telah mengirimkan pilihan pada{" "}
+                {formatRegistrationTime(lockedView.submittedAt)}. Berikut adalah kartu karakter
+                Department Head yang sudah dipilih oleh tim Anda.
               </p>
             </div>
             <button
               type="button"
-              className="btn-refresh-dept-head"
-              onClick={() => {
-                setLockedView(null);
-                setEmailInput("");
-                setPasswordInput("");
-              }}
+              className="btn-refresh-dept-head is-logout"
+              onClick={() => void handleLogout()}
             >
               <Icon name="arrowLeft" size={16} />
               <span>Kembali ke Login</span>
             </button>
           </div>
+
+          {postSubmitNotice && (
+            <div className="notice success-notice dept-head-notice" role="status">
+              <Icon name="check" size={18} />
+              <span>{postSubmitNotice}</span>
+            </div>
+          )}
 
           <div className="announcement-banner" role="status">
             <Icon name="calendar" size={20} />
@@ -284,13 +310,13 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
         <section className="panel dept-head-step-panel">
           <div className="dept-step-header">
-            <span className="step-pill">KARTU TERPILIH</span>
+            <span className="step-pill">KARTU PILIHAN ANDA</span>
             <div className="dept-step-title-wrap">
               <h2 className="dept-step-heading">
                 Kartu Dept Head Terpilih — {lockedView.group.title}
               </h2>
               <p className="section-caption is-confirmed-text">
-                Halaman ini hanya menampilkan karakter yang telah resmi Anda kunci ({lockedView.selectedCards.length} kartu).
+                Berikut adalah kartu karakter yang telah dipilih oleh tim Anda ({lockedView.selectedCards.length} kartu).
               </p>
             </div>
           </div>
@@ -357,7 +383,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
 
           <p className="dept-login-desc">
             Gunakan email dan password resmi kelompok Anda untuk masuk ke halaman pemilihan karakter
-            Department Head. Setelah Anda submit pilihan, akun otomatis keluar dan terkunci.
+            Department Head. Setelah submit berhasil, halaman ini akan menampilkan kartu karakter yang
+            telah tim Anda pilih.
           </p>
 
           {postSubmitNotice && (
@@ -442,7 +469,8 @@ export function DeptHeadApp({ initialSnapshot }: DeptHeadAppProps) {
             <h1 className="dept-head-title">Pemilihan Karakter Dept Head</h1>
             <p className="dept-head-subtitle">
               Amati 9 kartu karakter beserta kemampuan dan statistiknya, lalu tentukan pilihan untuk
-              tim Anda. Setelah submit, akun akan otomatis keluar dan tidak dapat memilih ulang.
+              tim Anda. Setelah submit berhasil, pilihan Anda tersimpan dan halaman hanya menampilkan
+              kartu pilihan tim Anda.
             </p>
           </div>
           <div className="dept-hero-actions">

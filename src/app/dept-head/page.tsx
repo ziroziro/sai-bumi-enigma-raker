@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { DeptHeadApp } from "@/components/dept-head-app";
+import { buildLockedDeptHeadView, buildPublicDeptHeadSnapshot } from "@/domain/dept-head";
 import { getDeptHeadGroupFromCookies } from "@/server/dept-head-auth";
-import { getPublicDeptHeadSnapshot } from "@/server/dept-head-service";
+import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,15 @@ export const metadata: Metadata = {
 
 export default async function DeptHeadPage() {
   const authenticatedGroup = await getDeptHeadGroupFromCookies();
-  const candidateSnapshot = authenticatedGroup
-    ? await getPublicDeptHeadSnapshot(authenticatedGroup)
-    : null;
+  const fullSnapshot = authenticatedGroup ? await getDeptHeadSnapshot() : null;
+  const initialLockedView =
+    fullSnapshot && authenticatedGroup
+      ? buildLockedDeptHeadView(fullSnapshot, authenticatedGroup)
+      : null;
   const initialSnapshot =
-    candidateSnapshot && !candidateSnapshot.mySelection ? candidateSnapshot : null;
+    fullSnapshot && authenticatedGroup && !initialLockedView
+      ? buildPublicDeptHeadSnapshot(fullSnapshot, authenticatedGroup)
+      : null;
 
   return (
     <>
@@ -27,7 +32,10 @@ export default async function DeptHeadPage() {
       </a>
       <SiteHeader activeNav="dept-head" />
       <main id="main">
-        <DeptHeadApp initialSnapshot={initialSnapshot} />
+        <DeptHeadApp
+          initialSnapshot={initialSnapshot}
+          initialLockedView={initialLockedView}
+        />
       </main>
       <footer className="site-footer">
         <div className="tapis-line" aria-hidden="true" />
