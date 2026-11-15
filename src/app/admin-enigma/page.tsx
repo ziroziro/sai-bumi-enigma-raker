@@ -1,5 +1,8 @@
 "use client";
 
+import { AdminDeptHeadPanel } from "@/components/admin-dept-head-panel";
+import type { DeptHeadStateSnapshot } from "@/domain/dept-head";
+
 import { useEffect, useState } from "react";
 import { officialGroups } from "@/config/event";
 import type { QuizSubmissionRecord } from "@/domain/quiz";
@@ -33,8 +36,29 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // Active Admin Tab: "quiz" | "attendance" | "catalog"
-  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog">("quiz");
+  // Active Admin Tab: "quiz" | "attendance" | "catalog" | "dept-head"
+  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head">("quiz");
+  const [deptHeadSnapshot, setDeptHeadSnapshot] = useState<DeptHeadStateSnapshot | null>(null);
+  const [loadingDeptHead, setLoadingDeptHead] = useState(false);
+
+  async function fetchDeptHead() {
+    setLoadingDeptHead(true);
+    try {
+      const res = await fetch("/api/admin/dept-head", {
+        headers: getAdminHeaders(),
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as DeptHeadStateSnapshot;
+        setDeptHeadSnapshot(data);
+      }
+    } catch {
+      // ignore transient network errors
+    } finally {
+      setLoadingDeptHead(false);
+    }
+  }
 
   // Quiz Submissions State
   const [submissions, setSubmissions] = useState<QuizSubmissionRecord[]>([]);
@@ -72,6 +96,7 @@ export default function AdminPage() {
           }
           setIsAuthenticated(true);
           void fetchAttendance();
+          void fetchDeptHead();
         } else {
           setIsAuthenticated(false);
         }
@@ -293,6 +318,7 @@ export default function AdminPage() {
         setIsAuthenticated(true);
         void refreshData();
         void fetchAttendance();
+        void fetchDeptHead();
       } else {
         const data = await res.json();
         setLoginError(data.error || "Password admin tidak sesuai.");
@@ -626,6 +652,19 @@ export default function AdminPage() {
         >
           <Icon name="people" size={16} />
           <span>Katalog QR Code Peserta ({totalRoster})</span>
+        </button>
+        <button
+          type="button"
+          className={`admin-tab-btn ${activeAdminTab === "dept-head" ? "is-active" : ""}`}
+          onClick={() => {
+            setActiveAdminTab("dept-head");
+            void fetchDeptHead();
+          }}
+        >
+          <Icon name="shield" size={16} />
+          <span>
+            Pemilihan Dept Head ({deptHeadSnapshot ? `${deptHeadSnapshot.totalGroupsSubmitted}/${deptHeadSnapshot.maxGroups}` : "0/4"})
+          </span>
         </button>
       </nav>
 
@@ -1161,6 +1200,16 @@ export default function AdminPage() {
             })}
           </div>
         </section>
+      )}
+
+      {activeAdminTab === "dept-head" && (
+        <AdminDeptHeadPanel
+          snapshot={deptHeadSnapshot}
+          loading={loadingDeptHead}
+          onRefresh={fetchDeptHead}
+          onSnapshotChange={setDeptHeadSnapshot}
+          getHeaders={getAdminHeaders}
+        />
       )}
     </main>
   );
