@@ -99,6 +99,7 @@ export const updateDeptHeadCardSchema = z.object({
     .refine(
       (v) =>
         v.length === 0 ||
+        v.startsWith("/") ||
         v.startsWith("https://") ||
         v.startsWith("http://") ||
         v.startsWith("data:image/"),
@@ -117,7 +118,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Sosok tenang yang membaca pola besar sebelum satu langkah pun diambil. Dikenal tegas menjaga arah misi dan menyatukan ritme seluruh tim.",
     silhouetteVariant: "fedora",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-1.jpg",
   },
   {
     id: 2,
@@ -127,7 +128,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Selalu muncul pertama saat situasi genting membutuhkan keputusan kilat. Mengubah tekanan lapangan menjadi momentum kemenangan tim.",
     silhouetteVariant: "trench",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-2.jpg",
   },
   {
     id: 3,
@@ -137,7 +138,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Tidak ada celah kecil atau anomali yang luput dari radar pengamatannya. Menguji setiap bukti dengan akurasi sebelum kesimpulan diambil.",
     silhouetteVariant: "monocle",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-3.jpg",
   },
   {
     id: 4,
@@ -147,7 +148,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Menggerakkan moral tim lewat komunikasi yang hangat namun penuh persuasi. Mampu membuka pintu buntu hanya dengan pendekatan yang tepat.",
     silhouetteVariant: "cloak",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-4.jpg",
   },
   {
     id: 5,
@@ -157,7 +158,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Melihat kekacauan sebagai teka-teki struktur yang bisa dirapikan. Menyusun alur kerja paling efisien agar energi tim tidak terbuang sia-sia.",
     silhouetteVariant: "architect",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-5.jpg",
   },
   {
     id: 6,
@@ -167,7 +168,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Selalu menyiapkan rencana B dan C sebelum orang lain menyadari ada ancaman. Tenang di balik layar, menentukan di momen penentu.",
     silhouetteVariant: "strategist",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-6.jpg",
   },
   {
     id: 7,
@@ -177,7 +178,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Memegang teguh standar tertinggi dalam setiap eksekusi. Menjadi jangkar keandalan ketika tim harus mempertahankan konsistensi hingga garis akhir.",
     silhouetteVariant: "sentinel",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-7.jpg",
   },
   {
     id: 8,
@@ -187,7 +188,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Terbiasa memecahkan kode rumit dengan sudut pandang yang tidak terduga. Menghadirkan ide segar ketika pola lama tidak lagi menjawab tantangan.",
     silhouetteVariant: "scholar",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-8.jpg",
   },
   {
     id: 9,
@@ -197,7 +198,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     description:
       "Sosok karismatik dengan intuisi tajam membaca peluang tersembunyi. Mendorong tim keluar dari batas nyaman untuk menaklukkan misi tersulit.",
     silhouetteVariant: "enigma",
-    customImageUrl: null,
+    customImageUrl: "/images/karakter/karakter-9.jpg",
   },
 ];
 
