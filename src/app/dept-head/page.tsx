@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Pemilihan Dept Head | Sai Bumi Enigma",
   description:
-    "Masuk dengan akun kelompok untuk mengamati 9 karakter dan menentukan Department Head di The Sai Bumi Enigma.",
+    "Masuk dengan akun kelompok untuk mengamati 7 karakter dan menentukan Department Head di The Sai Bumi Enigma.",
 };
 
 export default async function DeptHeadPage() {

@@ -25,10 +25,10 @@ import {
   upsertLocalDeptHeadCard,
 } from "../src/server/dept-head-store";
 
-test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 9 kartu karakter unik bernama KARAKTER 1..9", () => {
-  assert.equal(DEFAULT_DEPT_HEAD_CARDS.length, 9);
+test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 7 kartu karakter unik bernama KARAKTER 1..7", () => {
+  assert.equal(DEFAULT_DEPT_HEAD_CARDS.length, 7);
   const ids = new Set(DEFAULT_DEPT_HEAD_CARDS.map((card) => card.id));
-  assert.equal(ids.size, 9);
+  assert.equal(ids.size, 7);
   DEFAULT_DEPT_HEAD_CARDS.forEach((card, index) => {
     assert.equal(card.code, `KARAKTER ${index + 1}`);
     assert.ok(card.title.trim().length > 0);
@@ -81,10 +81,17 @@ test("Aturan kuota: 3 kelompok pertama wajib 2 karakter, kelompok ke-4 hanya 1 k
   ];
 
   // Kelompok ke-4 tidak boleh memilih 2 karakter
-  const invalidFourthTwo = validateDeptHeadSelectionInput(4, [7, 8], existingThree);
+  const invalidFourthTwo = validateDeptHeadSelectionInput(4, [6, 7], existingThree);
   assert.equal(invalidFourthTwo.ok, false);
   if (!invalidFourthTwo.ok) {
     assert.equal(invalidFourthTwo.code, "INVALID_CARD_COUNT");
+  }
+
+  // Karakter ID > 7 harus ditolak
+  const invalidCardEight = validateDeptHeadSelectionInput(4, [8], existingThree);
+  assert.equal(invalidCardEight.ok, false);
+  if (!invalidCardEight.ok) {
+    assert.equal(invalidCardEight.code, "INVALID_CARD");
   }
 
   // Kelompok ke-4 boleh memilih 1 karakter
@@ -196,7 +203,7 @@ test("Store lokal menjaga urutan pemilihan, kustomisasi karakter, normalisasi ko
     groupName: "Kelompok 1: Lupin",
     selectionOrder: 2,
     requiredCount: 2,
-    cardIds: [2, 9],
+    cardIds: [2, 3],
     submittedAt: "2026-11-15T01:02:00.000Z",
   });
   saveLocalDeptHeadSelection({
@@ -257,5 +264,5 @@ test("Store lokal menjaga urutan pemilihan, kustomisasi karakter, normalisasi ko
   assert.equal(merged[0]?.code, "KARAKTER 1");
   const built = buildDeptHeadSnapshot(merged, []);
   assert.equal(built.cards[1]?.title, "Override 2");
-  assert.equal(built.cards.length, 9);
+  assert.equal(built.cards.length, 7);
 });

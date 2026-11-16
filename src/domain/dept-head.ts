@@ -97,11 +97,11 @@ export interface LockedDeptHeadView {
 export const DEPT_HEAD_ANNOUNCEMENT_LABEL = "Pengumuman resmi Department Head akan diumumkan pada tanggal 19/11.";
 
 export const submitDeptHeadSchema = z.object({
-  cardIds: z.array(z.number().int().min(1).max(9)).min(1).max(2),
+  cardIds: z.array(z.number().int().min(1).max(7)).min(1).max(2),
 });
 
 export const updateDeptHeadCardSchema = z.object({
-  id: z.number().int().min(1).max(9),
+  id: z.number().int().min(1).max(7),
   code: z.string().trim().min(1).max(40),
   title: z.string().trim().min(1).max(120),
   roleHint: z.string().trim().min(1).max(120),
@@ -209,36 +209,12 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     silhouetteVariant: "sentinel",
     customImageUrl: "/images/karakter/karakter-7.jpg",
   },
-  {
-    id: 8,
-    code: "KARAKTER 8",
-    title: "Pengurai Sandi",
-    roleHint: "Inovasi & Pemecahan Masalah",
-    description:
-      "Terbiasa memecahkan kode rumit dengan sudut pandang yang tidak terduga. Menghadirkan ide segar ketika pola lama tidak lagi menjawab tantangan.",
-    power: 2850,
-    defense: 2550,
-    silhouetteVariant: "scholar",
-    customImageUrl: "/images/karakter/karakter-8.jpg",
-  },
-  {
-    id: 9,
-    code: "KARAKTER 9",
-    title: "Komandan Enigma",
-    roleHint: "Penggerak Visi & Penentu Akhir",
-    description:
-      "Sosok karismatik dengan intuisi tajam membaca peluang tersembunyi. Mendorong tim keluar dari batas nyaman untuk menaklukkan misi tersulit.",
-    power: 3100,
-    defense: 2700,
-    silhouetteVariant: "enigma",
-    customImageUrl: "/images/karakter/karakter-9.jpg",
-  },
 ];
 
 function normalizeCardCode(rawCode: string | undefined, fallback: string): string {
   const trimmed = rawCode?.trim();
   if (!trimmed) return fallback;
-  const legacyMatch = /^SILUET\s*0?([1-9])$/i.exec(trimmed);
+  const legacyMatch = /^SILUET\s*0?([1-7])$/i.exec(trimmed);
   if (legacyMatch) {
     return `KARAKTER ${legacyMatch[1]}`;
   }
@@ -254,7 +230,7 @@ function normalizeCardTitle(rawTitle: string | undefined, fallback: string): str
 export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptHeadCard[] {
   const byId = new Map<number, Partial<DeptHeadCard>>();
   for (const item of customCards ?? []) {
-    if (typeof item.id === "number" && item.id >= 1 && item.id <= 9) {
+    if (typeof item.id === "number" && item.id >= 1 && item.id <= 7) {
       byId.set(item.id, item);
     }
   }
@@ -422,7 +398,7 @@ export function validateDeptHeadSelectionInput(
     return { ok: false, code: "DUPLICATE_CARD", message: "Pilihan karakter tidak boleh sama." };
   }
 
-  if (cardIds.some((id) => !Number.isInteger(id) || id < 1 || id > 9)) {
+  if (cardIds.some((id) => !Number.isInteger(id) || id < 1 || id > 7)) {
     return { ok: false, code: "INVALID_CARD", message: "Terdapat pilihan karakter yang tidak valid." };
   }
 

@@ -274,7 +274,7 @@ export function AdminDeptHeadPanel({
           <h3>Rekap Pilihan Karakter Dept Head Per Kelompok</h3>
           <p>
             Pantau karakter Dept Head yang dipilih masing-masing kelompok (3 kelompok pertama memilih
-            2 karakter, kelompok ke-4 memilih 1 karakter) serta kelola 9 kartu karakter.
+            2 karakter, kelompok ke-4 memilih 1 karakter) serta kelola 7 kartu karakter.
           </p>
         </div>
         <div className="toolbar-buttons-cluster">
@@ -423,7 +423,7 @@ export function AdminDeptHeadPanel({
       <div className="panel admin-dept-cards-manager">
         <div className="admin-dept-manager-header">
           <div>
-            <h3>Kelola 9 Kartu Karakter &amp; Deskripsi</h3>
+            <h3>Kelola 7 Kartu Karakter &amp; Deskripsi</h3>
             <p>
               Ubah kode, judul, petunjuk peran, deskripsi karakter, variasi visual, atau unggah
               gambar karakter kustom kapan saja.

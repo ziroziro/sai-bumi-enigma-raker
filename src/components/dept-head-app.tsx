@@ -468,7 +468,7 @@ export function DeptHeadApp({
             </span>
             <h1 className="dept-head-title">Pemilihan Karakter Dept Head</h1>
             <p className="dept-head-subtitle">
-              Amati 9 kartu karakter beserta kemampuan dan statistiknya, lalu tentukan pilihan untuk
+              Amati 7 kartu karakter beserta kemampuan dan statistiknya, lalu tentukan pilihan untuk
               tim Anda. Setelah submit berhasil, pilihan Anda tersimpan dan halaman hanya menampilkan
               kartu pilihan tim Anda.
             </p>
