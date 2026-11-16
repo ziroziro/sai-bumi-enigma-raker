@@ -15,7 +15,7 @@ export default function PendaftaranPage() {
         <section className="hero" aria-labelledby="event-title">
           <div className="hero-eyebrow">
             <span className="eyebrow">SEBUAH PERJALANAN, SEBUAH KEBERSAMAAN</span>
-            <span className="edition">PRA-RAKER & RAKER 2026</span>
+            <span className="edition">THE SAI BUMI ENIGMA · 2026</span>
           </div>
           <div className="hero-intro">
             <div>

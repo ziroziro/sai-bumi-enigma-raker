@@ -717,7 +717,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
                       Kelompok {selectedGroupNumber}: <em>{detectedGroupName}</em>
                     </h3>
                     <p className="detected-team-subtitle">
-                      Tim Investigasi Resmi · Pra-Raker & Raker 2026
+                      Tim Investigasi Resmi · The Sai Bumi Enigma 2026
                     </p>
                   </div>
                   <div className="detected-icon-box">

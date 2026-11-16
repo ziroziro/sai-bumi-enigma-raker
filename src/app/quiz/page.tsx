@@ -15,7 +15,7 @@ export default function QuizPage() {
         <section className="hero" aria-labelledby="event-title">
           <div className="hero-eyebrow">
             <span className="eyebrow">THE SAI BUMI ENIGMA</span>
-            <span className="edition">PRA-RAKER & RAKER 2026</span>
+            <span className="edition">LAMPUNG · 2026</span>
           </div>
           <div className="hero-intro">
             <div>

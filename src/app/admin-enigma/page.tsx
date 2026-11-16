@@ -593,7 +593,7 @@ export default function AdminPage() {
             <span>PANEL PENGAWAS RESMI THE SAI BUMI ENIGMA</span>
           </div>
           <h1>Dashboard Pengawas Acara</h1>
-          <p>The Sai Bumi Enigma · Pra-Raker & Raker 2026</p>
+          <p>The Sai Bumi Enigma · Lampung 2026</p>
         </div>
 
         <div className="admin-header-actions">

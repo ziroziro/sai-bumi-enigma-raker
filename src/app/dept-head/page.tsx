@@ -39,7 +39,7 @@ export default async function DeptHeadPage() {
       </main>
       <footer className="site-footer">
         <div className="tapis-line" aria-hidden="true" />
-        <p>The Sai Bumi Enigma · Rapat Kerja Regional 1 · 2027</p>
+        <p>The Sai Bumi Enigma · Lampung · 2026</p>
       </footer>
     </>
   );

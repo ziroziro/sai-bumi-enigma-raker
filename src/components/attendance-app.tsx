@@ -898,7 +898,7 @@ export function AttendanceApp() {
       <header className="attendance-header-hero panel">
         <div className="header-meta-row">
           <span className="eyebrow">
-            <Icon name="compass" size={15} /> SISTEM ABSENSI AGENT · RAKER 2026
+            <Icon name="compass" size={15} /> SISTEM ABSENSI AGENT · 2026
           </span>
           <span className="header-tag-live">
             <span className="live-dot" /> VERIFIKASI LOKASI AKTIF
@@ -1272,7 +1272,7 @@ export function AttendanceApp() {
                       </span>
                       <div>
                         <strong>THE SAI BUMI ENIGMA</strong>
-                        <span className="id-kicker">KARTU IDENTITAS AGEN RESMI · RAKER 2026</span>
+                        <span className="id-kicker">KARTU IDENTITAS AGEN RESMI · 2026</span>
                       </div>
                     </div>
                     <div className="id-card-controls-right">
