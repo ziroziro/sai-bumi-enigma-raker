@@ -5,7 +5,6 @@ import { Icon } from "@/components/icon";
 import { SilhouetteArt } from "@/components/silhouette-art";
 import { formatRegistrationTime } from "@/config/event";
 import {
-  DEPT_HEAD_ANNOUNCEMENT_LABEL,
   type DeptHeadCard,
   type LockedDeptHeadView,
   type PublicDeptHeadSnapshot,
@@ -263,7 +262,6 @@ export function DeptHeadApp({
         group: snapshot.group,
         selectedCards: fallbackSelectedCards,
         submittedAt: new Date().toISOString(),
-        announcementDateLabel: DEPT_HEAD_ANNOUNCEMENT_LABEL,
       };
 
       setSnapshot(null);
@@ -318,14 +316,6 @@ export function DeptHeadApp({
               <span>{postSubmitNotice}</span>
             </div>
           )}
-
-          <div className="announcement-banner" role="status">
-            <Icon name="calendar" size={20} />
-            <div>
-              <strong>Informasi Pengumuman Chief Detective</strong>
-              <p>{lockedView.announcementDateLabel}</p>
-            </div>
-          </div>
         </section>
 
         <section className="panel dept-head-step-panel">
@@ -547,11 +537,6 @@ export function DeptHeadApp({
               <Icon name="arrow" size={18} />
             </button>
           </form>
-
-          <div className="announcement-banner is-compact" role="note">
-            <Icon name="calendar" size={16} />
-            <span>{DEPT_HEAD_ANNOUNCEMENT_LABEL}</span>
-          </div>
         </div>
       </div>
     );
@@ -617,14 +602,6 @@ export function DeptHeadApp({
             <strong className="metric-value">
               {isAllSubmitted ? "Semua Kelompok Selesai" : `Pilih ${snapshot.requiredCount} Karakter`}
             </strong>
-          </div>
-        </div>
-
-        <div className="announcement-banner" role="note">
-          <Icon name="calendar" size={18} />
-          <div>
-            <strong>Jadwal Pengumuman Chief Detective</strong>
-            <p>{DEPT_HEAD_ANNOUNCEMENT_LABEL}</p>
           </div>
         </div>
       </section>
