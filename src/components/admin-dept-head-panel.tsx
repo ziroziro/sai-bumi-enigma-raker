@@ -247,6 +247,48 @@ export function AdminDeptHeadPanel({
     }
   }
 
+  async function handleTogglePageLock() {
+    if (!snapshot) return;
+    const nextUnlocked = !snapshot.isPageUnlocked;
+    setBusyAction("toggle-page-lock");
+    setNotice(null);
+    setErrorMsg(null);
+
+    try {
+      const res = await fetch("/api/admin/dept-head", {
+        method: "POST",
+        headers: getHeaders(),
+        credentials: "include",
+        body: JSON.stringify({ isPageUnlocked: nextUnlocked }),
+      });
+      const payload = (await res.json()) as {
+        error?: string;
+        message?: string;
+        snapshot?: DeptHeadStateSnapshot;
+      };
+      if (!res.ok) {
+        setErrorMsg(payload.error || "Gagal memperbarui status kunci halaman Chief Detective.");
+        return;
+      }
+      if (payload.snapshot) {
+        onSnapshotChange({
+          ...payload.snapshot,
+          accounts: snapshot.accounts,
+        });
+      }
+      setNotice(
+        payload.message ||
+          (nextUnlocked
+            ? "Halaman Chief Detective berhasil dibuka untuk peserta."
+            : "Halaman Chief Detective berhasil dikunci.")
+      );
+    } catch {
+      setErrorMsg("Terjadi kesalahan jaringan saat mengubah status kunci halaman.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   if (!snapshot) {
     return (
       <section className="panel admin-dept-head-section">
@@ -271,13 +313,44 @@ export function AdminDeptHeadPanel({
     <section className="admin-dept-head-section">
       <div className="panel admin-attendance-toolbar">
         <div className="toolbar-info">
-          <h3>Rekap Pilihan Karakter Chief Detective Per Kelompok</h3>
+          <div className="dept-admin-status-row">
+            <h3>Rekap Pilihan Karakter Chief Detective Per Kelompok</h3>
+            <span
+              className={`dept-page-lock-badge ${
+                snapshot.isPageUnlocked ? "is-unlocked" : "is-locked"
+              }`}
+            >
+              <Icon name={snapshot.isPageUnlocked ? "check" : "lock"} size={13} />
+              <span>
+                {snapshot.isPageUnlocked
+                  ? "HALAMAN CHIEF DETECTIVE: DIBUKA"
+                  : "HALAMAN CHIEF DETECTIVE: TERKUNCI"}
+              </span>
+            </span>
+          </div>
           <p>
             Pantau karakter Chief Detective yang dipilih masing-masing kelompok (3 kelompok pertama memilih
-            2 karakter, kelompok ke-4 memilih 1 karakter) serta kelola 7 kartu karakter.
+            2 karakter, kelompok ke-4 memilih 1 karakter) serta buka/kunci halaman untuk peserta.
           </p>
         </div>
         <div className="toolbar-buttons-cluster">
+          <button
+            type="button"
+            className={`btn-admin-action ${
+              snapshot.isPageUnlocked ? "btn-lock-dept-page" : "btn-unlock-dept-page"
+            }`}
+            onClick={() => void handleTogglePageLock()}
+            disabled={busyAction !== null}
+          >
+            <Icon name={snapshot.isPageUnlocked ? "lock" : "check"} size={16} />
+            <span>
+              {busyAction === "toggle-page-lock"
+                ? "Memproses..."
+                : snapshot.isPageUnlocked
+                ? "Kunci Halaman Chief Detective"
+                : "Buka Halaman Chief Detective"}
+            </span>
+          </button>
           <button
             type="button"
             className="btn-admin-action"
@@ -350,6 +423,7 @@ export function AdminDeptHeadPanel({
                           <div className="admin-dept-chosen-info">
                             <span className="silhouette-code">{card.code}</span>
                             <strong>{card.title}</strong>
+                            <span className="admin-real-name-tag">{card.realName}</span>
                             <span className="silhouette-role-hint">{card.roleHint}</span>
                             <p>{card.description}</p>
                           </div>
@@ -575,6 +649,7 @@ export function AdminDeptHeadPanel({
 
                     <div className="silhouette-card-body">
                       <h4 className="silhouette-title">{card.title}</h4>
+                      <span className="admin-real-name-tag">{card.realName}</span>
                       <span className="silhouette-role-hint">{card.roleHint}</span>
                       <p className="silhouette-desc">{card.description}</p>
                     </div>

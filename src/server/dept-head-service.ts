@@ -12,10 +12,12 @@ import {
 import { createBackendClient } from "./supabase";
 import {
   deleteLocalDeptHeadSelection,
+  getLocalDeptHeadPageUnlocked,
   getLocalDeptHeadSnapshot,
   replaceLocalDeptHeadState,
   resetAllLocalDeptHeadSelections,
   saveLocalDeptHeadSelection,
+  setLocalDeptHeadPageUnlocked,
   upsertLocalDeptHeadCard,
 } from "./dept-head-store";
 
@@ -97,7 +99,11 @@ export async function getDeptHeadSnapshot(): Promise<DeptHeadStateSnapshot> {
       selections?: Omit<DeptHeadSelectionRecord, "groupName">[];
     };
 
-    const snapshot = buildDeptHeadSnapshot(raw.cards ?? [], raw.selections ?? []);
+    const snapshot = buildDeptHeadSnapshot(
+      raw.cards ?? [],
+      raw.selections ?? [],
+      getLocalDeptHeadPageUnlocked()
+    );
     replaceLocalDeptHeadState(snapshot.cards, snapshot.selections);
     return snapshot;
   } catch {
@@ -236,4 +242,10 @@ export async function resetAllDeptHeadSelections(): Promise<DeptHeadStateSnapsho
   }
 
   return snapshot;
+}
+
+export async function setDeptHeadPageUnlocked(
+  isPageUnlocked: boolean
+): Promise<DeptHeadStateSnapshot> {
+  return setLocalDeptHeadPageUnlocked(isPageUnlocked);
 }

@@ -21,6 +21,7 @@ import {
   replaceLocalDeptHeadState,
   resetAllLocalDeptHeadSelections,
   saveLocalDeptHeadSelection,
+  setLocalDeptHeadPageUnlocked,
   upsertLocalDeptHeadCard,
 } from "../src/server/dept-head-store";
 
@@ -28,8 +29,18 @@ test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 7 kartu karakter unik bernama KA
   assert.equal(DEFAULT_DEPT_HEAD_CARDS.length, 7);
   const ids = new Set(DEFAULT_DEPT_HEAD_CARDS.map((card) => card.id));
   assert.equal(ids.size, 7);
+  const expectedNames = [
+    "WIWID DARNIATI - MANAGER PDEV",
+    "BAGUS KURNIAWAN - MANAGER SALES",
+    "NURHAYATI - MANAGER HC3",
+    "SAHRI MAULUDIN - MANAGER WAREHOUSE",
+    "JEFRI KRISNA PUTRA - MANAGER PROMOTION",
+    "BAMBANG TRI ATMOJO - MANAGER PART",
+    "RIKI ZUBRI - MANAGER IT",
+  ];
   DEFAULT_DEPT_HEAD_CARDS.forEach((card, index) => {
     assert.equal(card.code, `KARAKTER ${index + 1}`);
+    assert.equal(card.realName, expectedNames[index]);
     assert.ok(card.title.trim().length > 0);
     assert.ok(card.description.trim().length > 0);
     assert.ok(card.roleHint.trim().length > 0);
@@ -255,6 +266,12 @@ test("Store lokal menjaga urutan pemilihan, kustomisasi karakter, normalisasi ko
   assert.equal(snapshot.totalGroupsSubmitted, 0);
   assert.equal(snapshot.nextRequiredCount, 2);
   assert.equal(snapshot.cards[0]?.title, "Karakter Kustom Kapten");
+
+  assert.equal(snapshot.isPageUnlocked, false);
+  snapshot = setLocalDeptHeadPageUnlocked(true);
+  assert.equal(snapshot.isPageUnlocked, true);
+  snapshot = setLocalDeptHeadPageUnlocked(false);
+  assert.equal(snapshot.isPageUnlocked, false);
 
   const merged = mergeDeptHeadCards([
     { id: 1, code: "SILUET 01" },

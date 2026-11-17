@@ -15,20 +15,39 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const groupNumber = getDeptHeadGroupFromRequest(request);
-  if (!groupNumber) {
-    return Response.json(
-      { error: "Silakan login menggunakan email dan password kelompok Anda terlebih dahulu." },
-      { status: 401 }
-    );
-  }
-
   try {
     const fullSnapshot = await getDeptHeadSnapshot();
+    if (!fullSnapshot.isPageUnlocked) {
+      return Response.json(
+        {
+          isPageUnlocked: false,
+          error: "Halaman Pemilihan Chief Detective saat ini masih dikunci oleh Admin.",
+        },
+        {
+          status: 403,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        }
+      );
+    }
+
+    const groupNumber = getDeptHeadGroupFromRequest(request);
+    if (!groupNumber) {
+      return Response.json(
+        {
+          isPageUnlocked: true,
+          error: "Silakan login menggunakan email dan password kelompok Anda terlebih dahulu.",
+        },
+        { status: 401 }
+      );
+    }
+
     const publicSnapshot = buildPublicDeptHeadSnapshot(fullSnapshot, groupNumber);
     if (publicSnapshot.mySelection) {
       return Response.json(
         {
+          isPageUnlocked: true,
           alreadySubmitted: true,
           lockedView: buildLockedDeptHeadView(fullSnapshot, groupNumber),
         },
@@ -52,6 +71,18 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const fullSnapshot = await getDeptHeadSnapshot();
+  if (!fullSnapshot.isPageUnlocked) {
+    return Response.json(
+      {
+        isPageUnlocked: false,
+        error: "Halaman Pemilihan Chief Detective saat ini sedang dikunci oleh Admin.",
+        code: "PAGE_LOCKED",
+      },
+      { status: 403 }
+    );
+  }
+
   const groupNumber = getDeptHeadGroupFromRequest(request);
   if (!groupNumber) {
     return Response.json(

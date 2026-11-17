@@ -11,6 +11,7 @@ import {
 } from "@/domain/dept-head";
 
 interface PersistedDeptHeadData {
+  isPageUnlocked?: boolean;
   cards: DeptHeadCard[];
   selections: DeptHeadSelectionRecord[];
 }
@@ -38,24 +39,40 @@ function readDiskDeptHeadData(): Partial<PersistedDeptHeadData> | null {
   }
 }
 
-function writeDiskDeptHeadData(cards: DeptHeadCard[], selections: DeptHeadSelectionRecord[]): void {
+function writeDiskDeptHeadData(
+  cards: DeptHeadCard[],
+  selections: DeptHeadSelectionRecord[],
+  isPageUnlocked: boolean
+): void {
   if (isTestRuntime()) return;
   try {
-    writeFileSync(DEPT_HEAD_DATA_FILE, JSON.stringify({ cards, selections }, null, 2), "utf8");
+    writeFileSync(
+      DEPT_HEAD_DATA_FILE,
+      JSON.stringify({ isPageUnlocked, cards, selections }, null, 2),
+      "utf8"
+    );
   } catch {
     // Abaikan jika filesystem read-only (misalnya di Vercel Serverless)
   }
 }
 
 const globalStore = globalThis as unknown as {
+  __sai_bumi_dept_head_unlocked?: boolean;
   __sai_bumi_dept_head_cards?: DeptHeadCard[];
   __sai_bumi_dept_head_selections?: DeptHeadSelectionRecord[];
 };
 
 const diskData =
-  !globalStore.__sai_bumi_dept_head_cards || !globalStore.__sai_bumi_dept_head_selections
+  !globalStore.__sai_bumi_dept_head_cards ||
+  !globalStore.__sai_bumi_dept_head_selections ||
+  typeof globalStore.__sai_bumi_dept_head_unlocked !== "boolean"
     ? readDiskDeptHeadData()
     : null;
+
+if (typeof globalStore.__sai_bumi_dept_head_unlocked !== "boolean") {
+  globalStore.__sai_bumi_dept_head_unlocked =
+    typeof diskData?.isPageUnlocked === "boolean" ? diskData.isPageUnlocked : false;
+}
 
 if (!globalStore.__sai_bumi_dept_head_cards) {
   globalStore.__sai_bumi_dept_head_cards = Array.isArray(diskData?.cards)
@@ -72,15 +89,27 @@ if (!globalStore.__sai_bumi_dept_head_selections) {
 function persistLocalState() {
   writeDiskDeptHeadData(
     globalStore.__sai_bumi_dept_head_cards ?? DEFAULT_DEPT_HEAD_CARDS,
-    globalStore.__sai_bumi_dept_head_selections ?? []
+    globalStore.__sai_bumi_dept_head_selections ?? [],
+    Boolean(globalStore.__sai_bumi_dept_head_unlocked)
   );
 }
 
 export function getLocalDeptHeadSnapshot(): DeptHeadStateSnapshot {
   return buildDeptHeadSnapshot(
     globalStore.__sai_bumi_dept_head_cards ?? DEFAULT_DEPT_HEAD_CARDS,
-    globalStore.__sai_bumi_dept_head_selections ?? []
+    globalStore.__sai_bumi_dept_head_selections ?? [],
+    Boolean(globalStore.__sai_bumi_dept_head_unlocked)
   );
+}
+
+export function setLocalDeptHeadPageUnlocked(isPageUnlocked: boolean): DeptHeadStateSnapshot {
+  globalStore.__sai_bumi_dept_head_unlocked = Boolean(isPageUnlocked);
+  persistLocalState();
+  return getLocalDeptHeadSnapshot();
+}
+
+export function getLocalDeptHeadPageUnlocked(): boolean {
+  return Boolean(globalStore.__sai_bumi_dept_head_unlocked);
 }
 
 export function replaceLocalDeptHeadState(

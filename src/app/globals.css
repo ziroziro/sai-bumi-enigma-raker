@@ -6217,8 +6217,37 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
 }
 
 .tcg-stars-row.is-revealed-stars {
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
   color: #ffd666;
   text-shadow: 0 0 8px rgba(240, 192, 90, 0.65);
+}
+
+.tcg-real-name {
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #fff6d1 0%, #ffd54f 52%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: #ffd54f;
+  filter: drop-shadow(0 1px 6px rgba(255, 196, 54, 0.35));
+}
+
+.tcg-stars-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: #ffd666;
 }
 
 .silhouette-art-frame.is-revealed-art {
@@ -6279,6 +6308,105 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
   border-color: rgba(240, 192, 90, 0.4);
   background: rgba(240, 192, 90, 0.12);
   color: #f4d58d;
+}
+
+/* Chief Detective Locked Page Gate & Admin Lock Controls */
+.dept-locked-gate-card {
+  text-align: center;
+  max-width: 500px;
+  border-color: #7a4c32;
+  background: linear-gradient(180deg, #1d1514 0%, #120e0f 100%);
+}
+
+.dept-locked-icon-ring {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(215, 164, 66, 0.45);
+  background: radial-gradient(circle, rgba(215, 164, 66, 0.2) 0%, rgba(112, 13, 22, 0.25) 100%);
+  color: var(--color-gold);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 24px rgba(215, 164, 66, 0.18);
+}
+
+.eyebrow.is-locked-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(212, 107, 113, 0.45);
+  background: rgba(112, 13, 22, 0.35);
+  color: #f6b9b5;
+  margin-bottom: 8px;
+}
+
+.dept-locked-gate-title {
+  font-family: var(--font-serif);
+  font-size: 30px;
+  line-height: 1.15;
+  color: var(--color-cream);
+}
+
+.dept-admin-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dept-page-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+}
+
+.dept-page-lock-badge.is-locked {
+  color: #f6b9b5;
+  background: rgba(112, 13, 22, 0.38);
+  border-color: rgba(212, 107, 113, 0.5);
+}
+
+.dept-page-lock-badge.is-unlocked {
+  color: #b7eab3;
+  background: rgba(44, 102, 52, 0.32);
+  border-color: rgba(124, 196, 118, 0.5);
+}
+
+.btn-unlock-dept-page {
+  border-color: #6bbf65 !important;
+  background: rgba(44, 102, 52, 0.35) !important;
+  color: #cbf5c8 !important;
+}
+
+.btn-unlock-dept-page:hover:not(:disabled) {
+  background: #4caf50 !important;
+  color: #0e140e !important;
+}
+
+.btn-lock-dept-page {
+  border-color: #b85d63 !important;
+  background: rgba(112, 13, 22, 0.35) !important;
+  color: #f7c2bf !important;
+}
+
+.btn-lock-dept-page:hover:not(:disabled) {
+  background: #a62630 !important;
+  color: #fff !important;
+}
+
+.admin-real-name-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #ffd54f;
+  text-transform: uppercase;
 }
 
 

@@ -13,12 +13,16 @@ import {
 interface DeptHeadAppProps {
   initialSnapshot: PublicDeptHeadSnapshot | null;
   initialLockedView?: LockedDeptHeadView | null;
+  initialIsPageUnlocked?: boolean;
 }
 
 export function DeptHeadApp({
   initialSnapshot,
   initialLockedView = null,
+  initialIsPageUnlocked = true,
 }: DeptHeadAppProps) {
+  const [isPageUnlocked, setIsPageUnlocked] = useState<boolean>(initialIsPageUnlocked);
+  const [checkingAccess, setCheckingAccess] = useState<boolean>(false);
   const [snapshot, setSnapshot] = useState<PublicDeptHeadSnapshot | null>(initialSnapshot);
   const [lockedView, setLockedView] = useState<LockedDeptHeadView | null>(initialLockedView);
   const [postSubmitNotice, setPostSubmitNotice] = useState<string | null>(null);
@@ -47,6 +51,43 @@ export function DeptHeadApp({
     [snapshot]
   );
 
+  const checkPageAccess = useCallback(async () => {
+    setCheckingAccess(true);
+    try {
+      const response = await fetch("/api/dept-head", {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (response.status === 403) {
+        setIsPageUnlocked(false);
+        return;
+      }
+      if (response.status === 401) {
+        setIsPageUnlocked(true);
+        setSnapshot(null);
+        setSelectedCardIds([]);
+        return;
+      }
+      if (!response.ok) return;
+      const latest = (await response.json()) as
+        | PublicDeptHeadSnapshot
+        | { alreadySubmitted: true; lockedView?: LockedDeptHeadView };
+
+      setIsPageUnlocked(true);
+      if ("alreadySubmitted" in latest && latest.alreadySubmitted && latest.lockedView) {
+        setSnapshot(null);
+        setLockedView(latest.lockedView);
+        setSelectedCardIds([]);
+        return;
+      }
+      setSnapshot(latest as PublicDeptHeadSnapshot);
+    } catch {
+      // ignore transient network errors
+    } finally {
+      setCheckingAccess(false);
+    }
+  }, []);
+
   const refreshSnapshot = useCallback(async () => {
     if (!snapshot) return;
     setRefreshing(true);
@@ -55,6 +96,10 @@ export function DeptHeadApp({
         cache: "no-store",
         credentials: "include",
       });
+      if (response.status === 403) {
+        setIsPageUnlocked(false);
+        return;
+      }
       if (response.status === 401) {
         setSnapshot(null);
         setSelectedCardIds([]);
@@ -83,6 +128,21 @@ export function DeptHeadApp({
       setRefreshing(false);
     }
   }, [snapshot]);
+
+  useEffect(() => {
+    if (isPageUnlocked) return;
+    const interval = setInterval(() => {
+      void checkPageAccess();
+    }, 5000);
+    const onFocus = () => {
+      void checkPageAccess();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [isPageUnlocked, checkPageAccess]);
 
   useEffect(() => {
     if (!snapshot) return;
@@ -121,10 +181,16 @@ export function DeptHeadApp({
 
       const payload = (await response.json()) as {
         error?: string;
+        isPageUnlocked?: boolean;
         alreadySubmitted?: boolean;
         lockedView?: LockedDeptHeadView;
         snapshot?: PublicDeptHeadSnapshot;
       };
+
+      if (response.status === 403 || payload.isPageUnlocked === false) {
+        setIsPageUnlocked(false);
+        return;
+      }
 
       if (!response.ok) {
         setLoginError(payload.error || "Email atau password akun kelompok tidak valid.");
@@ -241,6 +307,11 @@ export function DeptHeadApp({
         lockedView?: LockedDeptHeadView | null;
       };
 
+      if (response.status === 403) {
+        setIsPageUnlocked(false);
+        return;
+      }
+
       if (response.status === 401) {
         setSnapshot(null);
         setLoginError(payload.error || "Sesi login telah berakhir. Silakan login kembali.");
@@ -277,6 +348,38 @@ export function DeptHeadApp({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  // TAMPILAN SAAT HALAMAN DIKUNCI OLEH ADMIN
+  if (!isPageUnlocked) {
+    return (
+      <div className="dept-login-wrapper">
+        <div className="panel dept-login-card dept-locked-gate-card">
+          <div className="dept-locked-icon-ring" aria-hidden="true">
+            <Icon name="lock" size={28} />
+          </div>
+          <span className="eyebrow is-locked-eyebrow">
+            <Icon name="lock" size={13} /> AKSES HALAMAN DIKUNCI ADMIN
+          </span>
+          <h1 className="dept-locked-gate-title">Halaman Chief Detective Masih Terkunci</h1>
+          <p className="dept-login-desc">
+            Sesi pemilihan dan <em>reveal</em> kartu karakter <strong>Chief Detective</strong> belum
+            dibuka oleh Admin / Game Master. Halaman ini akan otomatis terbuka begitu Admin membuka
+            kunci akses.
+          </p>
+
+          <button
+            type="button"
+            className="btn-primary-link btn-submit-admin"
+            onClick={() => void checkPageAccess()}
+            disabled={checkingAccess}
+          >
+            <Icon name="refresh" size={17} />
+            <span>{checkingAccess ? "Memeriksa Status Akses..." : "Periksa Status Akses"}</span>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // TAMPILAN KARTU PILIHAN KELOMPOK (SETELAH SUBMIT ATAU SAAT LOGIN ULANG)
@@ -414,12 +517,15 @@ export function DeptHeadApp({
                         </span>
                       </div>
 
-                      <div className="tcg-stars-row is-revealed-stars" aria-label="Bintang 5">
-                        <span>★</span>
-                        <span>★</span>
-                        <span>★</span>
-                        <span>★</span>
-                        <span>★</span>
+                      <div className="tcg-stars-row is-revealed-stars" aria-label="Nama Chief Detective dan Bintang 5">
+                        <span className="tcg-real-name">{card.realName}</span>
+                        <span className="tcg-stars-cluster" aria-hidden="true">
+                          <span>★</span>
+                          <span>★</span>
+                          <span>★</span>
+                          <span>★</span>
+                          <span>★</span>
+                        </span>
                       </div>
 
                       <SilhouetteArt

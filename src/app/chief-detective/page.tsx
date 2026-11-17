@@ -14,14 +14,15 @@ export const metadata: Metadata = {
 };
 
 export default async function ChiefDetectivePage() {
-  const authenticatedGroup = await getDeptHeadGroupFromCookies();
-  const fullSnapshot = authenticatedGroup ? await getDeptHeadSnapshot() : null;
+  const fullSnapshot = await getDeptHeadSnapshot();
+  const isPageUnlocked = fullSnapshot.isPageUnlocked;
+  const authenticatedGroup = isPageUnlocked ? await getDeptHeadGroupFromCookies() : null;
   const initialLockedView =
-    fullSnapshot && authenticatedGroup
+    isPageUnlocked && authenticatedGroup
       ? buildLockedDeptHeadView(fullSnapshot, authenticatedGroup)
       : null;
   const initialSnapshot =
-    fullSnapshot && authenticatedGroup && !initialLockedView
+    isPageUnlocked && authenticatedGroup && !initialLockedView
       ? buildPublicDeptHeadSnapshot(fullSnapshot, authenticatedGroup)
       : null;
 
@@ -35,6 +36,7 @@ export default async function ChiefDetectivePage() {
         <DeptHeadApp
           initialSnapshot={initialSnapshot}
           initialLockedView={initialLockedView}
+          initialIsPageUnlocked={isPageUnlocked}
         />
       </main>
       <footer className="site-footer">

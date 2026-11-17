@@ -1,10 +1,11 @@
-import { updateDeptHeadCardSchema } from "@/domain/dept-head";
+import { DEFAULT_DEPT_HEAD_CARDS, updateDeptHeadCardSchema } from "@/domain/dept-head";
 import { getDeptHeadAccounts } from "@/server/dept-head-auth";
 import {
   deleteDeptHeadSelection,
   DeptHeadServiceError,
   getDeptHeadSnapshot,
   resetAllDeptHeadSelections,
+  setDeptHeadPageUnlocked,
   updateDeptHeadCard,
 } from "@/server/dept-head-service";
 
@@ -50,6 +51,29 @@ export async function GET(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  if (!checkAdminAuth(request)) {
+    return Response.json({ error: "Sesi admin tidak valid atau telah berakhir." }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const isPageUnlocked = Boolean(body?.isPageUnlocked);
+    const snapshot = await setDeptHeadPageUnlocked(isPageUnlocked);
+    return Response.json({
+      success: true,
+      message: isPageUnlocked
+        ? "Halaman Chief Detective berhasil dibuka untuk peserta."
+        : "Halaman Chief Detective berhasil dikunci kembali.",
+      snapshot,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Gagal mengubah status kunci halaman Chief Detective.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: Request) {
   if (!checkAdminAuth(request)) {
     return Response.json({ error: "Sesi admin tidak valid atau telah berakhir." }, { status: 401 });
@@ -68,8 +92,11 @@ export async function PATCH(request: Request) {
       );
     }
 
+    const baseCard = DEFAULT_DEPT_HEAD_CARDS.find((c) => c.id === parsed.data.id);
     const snapshot = await updateDeptHeadCard({
       ...parsed.data,
+      realName: baseCard?.realName ?? "",
+      revealImageUrl: baseCard?.revealImageUrl ?? `/images/karakter/karakter-${parsed.data.id}-reveal.jpg`,
       customImageUrl: parsed.data.customImageUrl ? parsed.data.customImageUrl : null,
     });
     return Response.json({ success: true, snapshot });

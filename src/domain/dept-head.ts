@@ -31,6 +31,7 @@ export interface DeptHeadCard {
   id: number;
   code: string;
   title: string;
+  realName: string;
   roleHint: string;
   description: string;
   power?: number;
@@ -57,6 +58,7 @@ export interface DeptHeadClaimOwner {
 }
 
 export interface DeptHeadStateSnapshot {
+  isPageUnlocked: boolean;
   cards: DeptHeadCard[];
   selections: DeptHeadSelectionRecord[];
   totalGroupsSubmitted: number;
@@ -71,6 +73,7 @@ export interface PublicDeptHeadSelection {
 }
 
 export interface PublicDeptHeadSnapshot {
+  isPageUnlocked: boolean;
   group: {
     number: number;
     name: string;
@@ -127,6 +130,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 1,
     code: "KARAKTER 1",
     title: "Sang Pengatur Arah",
+    realName: "WIWID DARNIATI - MANAGER PDEV",
     roleHint: "Strategi & Eksekusi Terukur",
     description:
       "Sosok tenang yang membaca pola besar sebelum satu langkah pun diambil. Tegas menjaga arah misi dan menyatukan ritme seluruh tim.",
@@ -140,6 +144,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 2,
     code: "KARAKTER 2",
     title: "Penjaga Garis Depan",
+    realName: "BAGUS KURNIAWAN - MANAGER SALES",
     roleHint: "Aksi Cepat & Koordinasi Lapangan",
     description:
       "Selalu muncul pertama saat situasi genting membutuhkan keputusan kilat. Mengubah tekanan lapangan menjadi momentum kemenangan tim.",
@@ -153,6 +158,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 3,
     code: "KARAKTER 3",
     title: "Sang Pengamat Detail",
+    realName: "NURHAYATI - MANAGER HC3",
     roleHint: "Ketelitian Angka & Analisis Tajam",
     description:
       "Tidak ada celah kecil atau anomali yang luput dari radar pengamatannya. Menguji setiap bukti dengan akurasi sebelum kesimpulan diambil.",
@@ -166,6 +172,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 4,
     code: "KARAKTER 4",
     title: "Perangkai Relasi",
+    realName: "SAHRI MAULUDIN - MANAGER WAREHOUSE",
     roleHint: "Komunikasi & Energi Kolaborasi",
     description:
       "Menggerakkan moral tim lewat komunikasi yang hangat namun penuh persuasi. Mampu membuka pintu buntu dengan pendekatan yang tepat.",
@@ -179,6 +186,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 5,
     code: "KARAKTER 5",
     title: "Sang Arsitek Sistem",
+    realName: "JEFRI KRISNA PUTRA - MANAGER PROMOTION",
     roleHint: "Struktur Kerja & Efisiensi",
     description:
       "Melihat kekacauan sebagai teka-teki struktur yang bisa dirapikan. Menyusun alur kerja paling efisien agar energi tim tidak terbuang sia-sia.",
@@ -192,6 +200,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 6,
     code: "KARAKTER 6",
     title: "Ahli Taktik Senyap",
+    realName: "BAMBANG TRI ATMOJO - MANAGER PART",
     roleHint: "Perencanaan Cadangan & Risiko",
     description:
       "Selalu menyiapkan rencana B dan C sebelum orang lain menyadari ada ancaman. Tenang di balik layar, menentukan di momen penentu.",
@@ -205,6 +214,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     id: 7,
     code: "KARAKTER 7",
     title: "Penjaga Standar",
+    realName: "RIKI ZUBRI - MANAGER IT",
     roleHint: "Disiplin & Kualitas Hasil",
     description:
       "Memegang teguh standar tertinggi dalam setiap eksekusi. Menjadi jangkar keandalan ketika tim harus mempertahankan konsistensi hingga garis akhir.",
@@ -247,6 +257,7 @@ export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptH
       id: base.id,
       code: normalizeCardCode(override.code, base.code),
       title: normalizeCardTitle(override.title, base.title),
+      realName: override.realName?.trim() || base.realName,
       roleHint: override.roleHint?.trim() || base.roleHint,
       description: override.description?.trim() || base.description,
       power: typeof override.power === "number" ? override.power : base.power,
@@ -268,7 +279,8 @@ export function getRequiredDeptHeadCount(submittedGroupsCount: number): 1 | 2 {
 
 export function buildDeptHeadSnapshot(
   cardsInput: Partial<DeptHeadCard>[],
-  selectionsInput: Omit<DeptHeadSelectionRecord, "groupName">[]
+  selectionsInput: Omit<DeptHeadSelectionRecord, "groupName">[],
+  isPageUnlocked = false
 ): DeptHeadStateSnapshot {
   const cards = mergeDeptHeadCards(cardsInput);
   const selections: DeptHeadSelectionRecord[] = [...selectionsInput]
@@ -291,6 +303,7 @@ export function buildDeptHeadSnapshot(
 
   const totalGroupsSubmitted = selections.length;
   return {
+    isPageUnlocked: Boolean(isPageUnlocked),
     cards,
     selections,
     totalGroupsSubmitted,
@@ -312,6 +325,7 @@ export function buildPublicDeptHeadSnapshot(
     .sort((a, b) => a - b);
 
   return {
+    isPageUnlocked: snapshot.isPageUnlocked,
     group: {
       number: groupMeta.number,
       name: groupMeta.name,

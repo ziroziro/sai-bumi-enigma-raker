@@ -35,6 +35,16 @@ export async function POST(request: Request) {
     }
 
     const fullSnapshot = await getDeptHeadSnapshot();
+    if (!fullSnapshot.isPageUnlocked) {
+      return Response.json(
+        {
+          isPageUnlocked: false,
+          error: "Halaman Pemilihan Chief Detective saat ini masih dikunci oleh Admin.",
+        },
+        { status: 403 }
+      );
+    }
+
     const lockedView = buildLockedDeptHeadView(fullSnapshot, account.groupNumber);
 
     // Jika kelompok sudah pernah submit, akun tidak diberi sesi aktif untuk masuk ke form lagi
