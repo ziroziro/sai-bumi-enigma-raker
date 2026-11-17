@@ -34,7 +34,7 @@ function mapRpcError(message: string): DeptHeadServiceError {
   if (message.includes("GROUP_ALREADY_SUBMITTED")) {
     return new DeptHeadServiceError(
       "GROUP_ALREADY_SUBMITTED",
-      "Kelompok ini sudah mengirimkan pilihan Dept Head sebelumnya.",
+      "Kelompok ini sudah mengirimkan pilihan Chief Detective sebelumnya.",
       409
     );
   }
@@ -62,7 +62,7 @@ function mapRpcError(message: string): DeptHeadServiceError {
   if (message.includes("INVALID_GROUP")) {
     return new DeptHeadServiceError("INVALID_GROUP", "Kelompok yang dipilih tidak valid.", 400);
   }
-  return new DeptHeadServiceError("SUBMIT_FAILED", "Gagal menyimpan pilihan Dept Head.", 500);
+  return new DeptHeadServiceError("SUBMIT_FAILED", "Gagal menyimpan pilihan Chief Detective.", 500);
 }
 
 function isMissingMigrationError(error: { code?: string; message?: string } | null): boolean {

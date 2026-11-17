@@ -279,7 +279,7 @@ export function DeptHeadApp({
               <p className="dept-head-subtitle">
                 Terima kasih, <strong>{lockedView.group.title}</strong> telah mengirimkan pilihan pada{" "}
                 {formatRegistrationTime(lockedView.submittedAt)}. Berikut adalah kartu karakter
-                Department Head yang sudah dipilih oleh tim Anda.
+                Chief Detective yang sudah dipilih oleh tim Anda.
               </p>
             </div>
             <button
@@ -302,7 +302,7 @@ export function DeptHeadApp({
           <div className="announcement-banner" role="status">
             <Icon name="calendar" size={20} />
             <div>
-              <strong>Informasi Pengumuman Department Head</strong>
+              <strong>Informasi Pengumuman Chief Detective</strong>
               <p>{lockedView.announcementDateLabel}</p>
             </div>
           </div>
@@ -313,7 +313,7 @@ export function DeptHeadApp({
             <span className="step-pill">KARTU PILIHAN ANDA</span>
             <div className="dept-step-title-wrap">
               <h2 className="dept-step-heading">
-                Kartu Dept Head Terpilih — {lockedView.group.title}
+                Kartu Chief Detective Terpilih — {lockedView.group.title}
               </h2>
               <p className="section-caption is-confirmed-text">
                 Berikut adalah kartu karakter yang telah dipilih oleh tim Anda ({lockedView.selectedCards.length} kartu).
@@ -383,7 +383,7 @@ export function DeptHeadApp({
 
           <p className="dept-login-desc">
             Gunakan email dan password resmi kelompok Anda untuk masuk ke halaman pemilihan karakter
-            Department Head. Setelah submit berhasil, halaman ini akan menampilkan kartu karakter yang
+            Chief Detective. Setelah submit berhasil, halaman ini akan menampilkan kartu karakter yang
             telah tim Anda pilih.
           </p>
 
@@ -466,7 +466,7 @@ export function DeptHeadApp({
             <span className="eyebrow">
               <Icon name="shield" size={14} /> AKUN AKTIF · {snapshot.group.title.toUpperCase()}
             </span>
-            <h1 className="dept-head-title">Pemilihan Karakter Dept Head</h1>
+            <h1 className="dept-head-title">Pemilihan Karakter Chief Detective</h1>
             <p className="dept-head-subtitle">
               Amati 7 kartu karakter beserta kemampuan dan statistiknya, lalu tentukan pilihan untuk
               tim Anda. Setelah submit berhasil, pilihan Anda tersimpan dan halaman hanya menampilkan
@@ -518,7 +518,7 @@ export function DeptHeadApp({
         <div className="announcement-banner" role="note">
           <Icon name="calendar" size={18} />
           <div>
-            <strong>Jadwal Pengumuman Department Head</strong>
+            <strong>Jadwal Pengumuman Chief Detective</strong>
             <p>{DEPT_HEAD_ANNOUNCEMENT_LABEL}</p>
           </div>
         </div>

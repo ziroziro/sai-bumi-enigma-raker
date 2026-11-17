@@ -662,7 +662,7 @@ export default function AdminPage() {
         >
           <Icon name="shield" size={16} />
           <span>
-            Pemilihan Dept Head ({deptHeadSnapshot ? `${deptHeadSnapshot.totalGroupsSubmitted}/${deptHeadSnapshot.maxGroups}` : "0/4"})
+            Pemilihan Chief Detective ({deptHeadSnapshot ? `${deptHeadSnapshot.totalGroupsSubmitted}/${deptHeadSnapshot.maxGroups}` : "0/4"})
           </span>
         </button>
       </nav>

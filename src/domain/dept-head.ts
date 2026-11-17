@@ -94,7 +94,7 @@ export interface LockedDeptHeadView {
   announcementDateLabel: string;
 }
 
-export const DEPT_HEAD_ANNOUNCEMENT_LABEL = "Pengumuman resmi Department Head akan diumumkan pada tanggal 19/11.";
+export const DEPT_HEAD_ANNOUNCEMENT_LABEL = "Pengumuman resmi Chief Detective akan diumumkan pada tanggal 19/11.";
 
 export const submitDeptHeadSchema = z.object({
   cardIds: z.array(z.number().int().min(1).max(7)).min(1).max(2),
@@ -380,7 +380,7 @@ export function validateDeptHeadSelectionInput(
     return {
       ok: false,
       code: "GROUP_ALREADY_SUBMITTED",
-      message: `${getGroupTitle(groupNumber)} sudah mengirimkan pilihan Dept Head.`,
+      message: `${getGroupTitle(groupNumber)} sudah mengirimkan pilihan Chief Detective.`,
     };
   }
 
@@ -388,7 +388,7 @@ export function validateDeptHeadSelectionInput(
     return {
       ok: false,
       code: "ALL_GROUPS_SUBMITTED",
-      message: "Keempat kelompok sudah selesai mengirimkan pilihan Dept Head.",
+      message: "Keempat kelompok sudah selesai mengirimkan pilihan Chief Detective.",
     };
   }
 

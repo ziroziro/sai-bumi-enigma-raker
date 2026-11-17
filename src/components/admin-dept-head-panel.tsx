@@ -166,7 +166,7 @@ export function AdminDeptHeadPanel({
   }
 
   async function handleResetGroup(groupNumber: number, groupName: string) {
-    if (!confirm(`Reset pilihan Dept Head untuk ${groupName}? Kelompok ini dapat memilih ulang.`)) {
+    if (!confirm(`Reset pilihan Chief Detective untuk ${groupName}? Kelompok ini dapat memilih ulang.`)) {
       return;
     }
 
@@ -207,7 +207,7 @@ export function AdminDeptHeadPanel({
   async function handleResetAll() {
     if (
       !confirm(
-        "PERINGATAN: Kosongkan seluruh pilihan Dept Head untuk semua 4 kelompok? Kartu karakter tetap tersimpan, namun seluruh kelompok harus memilih ulang."
+        "PERINGATAN: Kosongkan seluruh pilihan Chief Detective untuk semua 4 kelompok? Kartu karakter tetap tersimpan, namun seluruh kelompok harus memilih ulang."
       )
     ) {
       return;
@@ -230,7 +230,7 @@ export function AdminDeptHeadPanel({
         snapshot?: DeptHeadStateSnapshot;
       };
       if (!res.ok) {
-        setErrorMsg(payload.error || "Gagal mengosongkan semua pilihan Dept Head.");
+        setErrorMsg(payload.error || "Gagal mengosongkan semua pilihan Chief Detective.");
         return;
       }
       if (payload.snapshot) {
@@ -239,7 +239,7 @@ export function AdminDeptHeadPanel({
           accounts: snapshot?.accounts,
         });
       }
-      setNotice(payload.message || "Seluruh pilihan Dept Head berhasil dikosongkan.");
+      setNotice(payload.message || "Seluruh pilihan Chief Detective berhasil dikosongkan.");
     } catch {
       setErrorMsg("Terjadi kesalahan jaringan saat mengosongkan semua pilihan.");
     } finally {
@@ -252,7 +252,7 @@ export function AdminDeptHeadPanel({
       <section className="panel admin-dept-head-section">
         <div className="empty-state-box">
           <Icon name="compass" size={32} />
-          <p>{loading ? "Memuat data pemilihan Dept Head..." : "Data pemilihan Dept Head belum dimuat."}</p>
+          <p>{loading ? "Memuat data pemilihan Chief Detective..." : "Data pemilihan Chief Detective belum dimuat."}</p>
           <button
             type="button"
             className="btn-admin-action"
@@ -271,9 +271,9 @@ export function AdminDeptHeadPanel({
     <section className="admin-dept-head-section">
       <div className="panel admin-attendance-toolbar">
         <div className="toolbar-info">
-          <h3>Rekap Pilihan Karakter Dept Head Per Kelompok</h3>
+          <h3>Rekap Pilihan Karakter Chief Detective Per Kelompok</h3>
           <p>
-            Pantau karakter Dept Head yang dipilih masing-masing kelompok (3 kelompok pertama memilih
+            Pantau karakter Chief Detective yang dipilih masing-masing kelompok (3 kelompok pertama memilih
             2 karakter, kelompok ke-4 memilih 1 karakter) serta kelola 7 kartu karakter.
           </p>
         </div>
@@ -325,7 +325,7 @@ export function AdminDeptHeadPanel({
                 </div>
                 <span className={`dept-group-badge ${record ? "is-done" : "is-open"}`}>
                   {record
-                    ? `Urutan #${record.selectionOrder} · ${record.cardIds.length} Dept Head`
+                    ? `Urutan #${record.selectionOrder} · ${record.cardIds.length} Chief Detective`
                     : "Belum Memilih"}
                 </span>
               </div>
@@ -374,7 +374,7 @@ export function AdminDeptHeadPanel({
               ) : (
                 <div className="admin-dept-empty-group">
                   <Icon name="clock" size={20} />
-                  <span>Kelompok ini belum mengirim pilihan karakter Dept Head.</span>
+                  <span>Kelompok ini belum mengirim pilihan karakter Chief Detective.</span>
                 </div>
               )}
             </article>
@@ -386,7 +386,7 @@ export function AdminDeptHeadPanel({
         <div className="panel admin-dept-cards-manager">
           <div className="admin-dept-manager-header">
             <div>
-              <h3>Akun Login Kelompok (Halaman Pemilihan Dept Head)</h3>
+              <h3>Akun Login Kelompok (Halaman Pemilihan Chief Detective)</h3>
               <p>
                 Bagikan email &amp; password berikut ke perwakilan masing-masing kelompok. Satu
                 kelompok menggunakan satu akun khusus untuk memilih karakter.

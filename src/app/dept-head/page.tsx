@@ -8,9 +8,9 @@ import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pemilihan Dept Head | Sai Bumi Enigma",
+  title: "Pemilihan Chief Detective | Sai Bumi Enigma",
   description:
-    "Masuk dengan akun kelompok untuk mengamati 7 karakter dan menentukan Department Head di The Sai Bumi Enigma.",
+    "Masuk dengan akun kelompok untuk mengamati 7 karakter dan menentukan Chief Detective di The Sai Bumi Enigma.",
 };
 
 export default async function DeptHeadPage() {
@@ -28,7 +28,7 @@ export default async function DeptHeadPage() {
   return (
     <>
       <a href="#main" className="skip-link">
-        Langsung ke halaman pemilihan Dept Head
+        Langsung ke halaman pemilihan Chief Detective
       </a>
       <SiteHeader activeNav="dept-head" />
       <main id="main">

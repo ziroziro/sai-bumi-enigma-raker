@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal memuat data pemilihan Dept Head.";
+    const message = error instanceof Error ? error.message : "Gagal memuat data pemilihan Chief Detective.";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -93,7 +93,7 @@ export async function DELETE(request: Request) {
       const snapshot = await resetAllDeptHeadSelections();
       return Response.json({
         success: true,
-        message: "Seluruh pilihan Dept Head kelompok berhasil dikosongkan.",
+        message: "Seluruh pilihan Chief Detective kelompok berhasil dikosongkan.",
         snapshot,
       });
     }
@@ -103,7 +103,7 @@ export async function DELETE(request: Request) {
       const snapshot = await deleteDeptHeadSelection(groupNumber);
       return Response.json({
         success: true,
-        message: `Pilihan Dept Head untuk Kelompok ${groupNumber} berhasil direset.`,
+        message: `Pilihan Chief Detective untuk Kelompok ${groupNumber} berhasil direset.`,
         snapshot,
       });
     }
@@ -113,7 +113,7 @@ export async function DELETE(request: Request) {
     if (error instanceof DeptHeadServiceError) {
       return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }
-    const message = error instanceof Error ? error.message : "Gagal mereset pilihan Dept Head.";
+    const message = error instanceof Error ? error.message : "Gagal mereset pilihan Chief Detective.";
     return Response.json({ error: message }, { status: 500 });
   }
 }
