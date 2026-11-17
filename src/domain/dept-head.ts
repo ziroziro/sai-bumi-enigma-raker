@@ -37,6 +37,7 @@ export interface DeptHeadCard {
   defense?: number;
   silhouetteVariant: SilhouetteVariant;
   customImageUrl?: string | null;
+  revealImageUrl?: string | null;
 }
 
 export interface DeptHeadSelectionRecord {
@@ -136,6 +137,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2600,
     silhouetteVariant: "fedora",
     customImageUrl: "/images/karakter/karakter-1.jpg",
+    revealImageUrl: "/images/karakter/karakter-1-reveal.jpg",
   },
   {
     id: 2,
@@ -148,6 +150,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2400,
     silhouetteVariant: "trench",
     customImageUrl: "/images/karakter/karakter-2.jpg",
+    revealImageUrl: "/images/karakter/karakter-2-reveal.jpg",
   },
   {
     id: 3,
@@ -160,6 +163,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2900,
     silhouetteVariant: "monocle",
     customImageUrl: "/images/karakter/karakter-3.jpg",
+    revealImageUrl: "/images/karakter/karakter-3-reveal.jpg",
   },
   {
     id: 4,
@@ -172,6 +176,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2700,
     silhouetteVariant: "cloak",
     customImageUrl: "/images/karakter/karakter-4.jpg",
+    revealImageUrl: "/images/karakter/karakter-4-reveal.jpg",
   },
   {
     id: 5,
@@ -184,6 +189,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2800,
     silhouetteVariant: "architect",
     customImageUrl: "/images/karakter/karakter-5.jpg",
+    revealImageUrl: "/images/karakter/karakter-5-reveal.jpg",
   },
   {
     id: 6,
@@ -196,6 +202,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2600,
     silhouetteVariant: "strategist",
     customImageUrl: "/images/karakter/karakter-6.jpg",
+    revealImageUrl: "/images/karakter/karakter-6-reveal.jpg",
   },
   {
     id: 7,
@@ -208,6 +215,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 3100,
     silhouetteVariant: "sentinel",
     customImageUrl: "/images/karakter/karakter-7.jpg",
+    revealImageUrl: "/images/karakter/karakter-7-reveal.jpg",
   },
 ];
 
@@ -251,6 +259,7 @@ export function mergeDeptHeadCards(customCards?: Partial<DeptHeadCard>[]): DeptH
           ? override.silhouetteVariant
           : base.silhouetteVariant,
       customImageUrl: override.customImageUrl ?? base.customImageUrl ?? null,
+      revealImageUrl: override.revealImageUrl ?? base.revealImageUrl ?? null,
     };
   });
 }

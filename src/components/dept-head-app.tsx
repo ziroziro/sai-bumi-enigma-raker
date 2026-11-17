@@ -30,6 +30,7 @@ export function DeptHeadApp({
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [selectedCardIds, setSelectedCardIds] = useState<number[]>([]);
+  const [revealedCardIds, setRevealedCardIds] = useState<number[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -169,7 +170,21 @@ export function DeptHeadApp({
     setLockedView(null);
     setPostSubmitNotice(null);
     setSelectedCardIds([]);
+    setRevealedCardIds([]);
     setErrorMessage(null);
+  }
+
+  function handleToggleRevealCard(cardId: number) {
+    setRevealedCardIds((prev) =>
+      prev.includes(cardId) ? prev.filter((id) => id !== cardId) : [...prev, cardId]
+    );
+  }
+
+  function handleToggleRevealAll() {
+    if (!lockedView) return;
+    const allIds = lockedView.selectedCards.map((c) => c.id);
+    const allRevealed = allIds.every((id) => revealedCardIds.includes(id));
+    setRevealedCardIds(allRevealed ? [] : allIds);
   }
 
   function handleToggleCard(cardId: number) {
@@ -254,9 +269,10 @@ export function DeptHeadApp({
       setSnapshot(null);
       setLockedView(nextLockedView);
       setSelectedCardIds([]);
+      setRevealedCardIds([]);
       setLoginError(null);
       setPostSubmitNotice(
-        `Terima kasih! Submit pilihan karakter untuk ${submittedGroupTitle} berhasil disimpan.`
+        `Terima kasih! Submit pilihan karakter untuk ${submittedGroupTitle} berhasil disimpan. Klik kartu di bawah untuk me-reveal karakter!`
       );
     } catch {
       setErrorMessage("Terjadi kesalahan jaringan. Silakan muat ulang status lalu coba kembali.");
@@ -267,6 +283,10 @@ export function DeptHeadApp({
 
   // TAMPILAN KARTU PILIHAN KELOMPOK (SETELAH SUBMIT ATAU SAAT LOGIN ULANG)
   if (lockedView) {
+    const allCardIds = lockedView.selectedCards.map((c) => c.id);
+    const allRevealed =
+      allCardIds.length > 0 && allCardIds.every((id) => revealedCardIds.includes(id));
+
     return (
       <div className="page-shell dept-head-shell">
         <section className="panel dept-head-hero">
@@ -278,8 +298,8 @@ export function DeptHeadApp({
               <h1 className="dept-head-title">Terima Kasih, Pilihan Anda Tersimpan</h1>
               <p className="dept-head-subtitle">
                 Terima kasih, <strong>{lockedView.group.title}</strong> telah mengirimkan pilihan pada{" "}
-                {formatRegistrationTime(lockedView.submittedAt)}. Berikut adalah kartu karakter
-                Chief Detective yang sudah dipilih oleh tim Anda.
+                {formatRegistrationTime(lockedView.submittedAt)}. Klik masing-masing kartu di bawah
+                untuk memutar dan me-reveal identitas kartu karakter Chief Detective pilihan tim Anda!
               </p>
             </div>
             <button
@@ -309,57 +329,142 @@ export function DeptHeadApp({
         </section>
 
         <section className="panel dept-head-step-panel">
-          <div className="dept-step-header">
-            <span className="step-pill">KARTU PILIHAN ANDA</span>
-            <div className="dept-step-title-wrap">
-              <h2 className="dept-step-heading">
-                Kartu Chief Detective Terpilih — {lockedView.group.title}
-              </h2>
-              <p className="section-caption is-confirmed-text">
-                Berikut adalah kartu karakter yang telah dipilih oleh tim Anda ({lockedView.selectedCards.length} kartu).
-              </p>
+          <div className="dept-step-header is-locked-header">
+            <div className="dept-step-header-left">
+              <span className="step-pill">KARTU PILIHAN ANDA</span>
+              <div className="dept-step-title-wrap">
+                <h2 className="dept-step-heading">
+                  Kartu Chief Detective Terpilih — {lockedView.group.title}
+                </h2>
+                <p className="section-caption is-confirmed-text">
+                  Klik langsung pada kartu ({lockedView.selectedCards.length} kartu) untuk melihat
+                  animasi putaran kartu dan me-reveal wujud asli karakter Chief Detective Anda.
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              className="btn-refresh-dept-head btn-reveal-all"
+              onClick={handleToggleRevealAll}
+            >
+              <Icon name="sparkles" size={16} />
+              <span>{allRevealed ? "Tutup Semua Kartu" : "Reveal Semua Kartu"}</span>
+            </button>
           </div>
 
           <div className="locked-dept-head-grid">
-            {lockedView.selectedCards.map((card) => (
-              <div key={card.id} className="silhouette-card is-owned is-readonly">
-                <div className="tcg-card-topbar">
-                  <h3 className="tcg-card-name">{card.title}</h3>
-                  <span className="silhouette-status-pill is-owned">
-                    <Icon name="check" size={13} /> Pilihan Tim Anda
-                  </span>
-                </div>
+            {lockedView.selectedCards.map((card) => {
+              const isRevealed = revealedCardIds.includes(card.id);
+              const revealImgSrc =
+                card.revealImageUrl || `/images/karakter/karakter-${card.id}-reveal.jpg`;
 
-                <div className="tcg-stars-row" aria-label="Bintang 5">
-                  <span>★</span>
-                  <span>★</span>
-                  <span>★</span>
-                  <span>★</span>
-                  <span>★</span>
-                </div>
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => handleToggleRevealCard(card.id)}
+                  aria-pressed={isRevealed}
+                  aria-label={`${
+                    isRevealed ? "Balik kembali" : "Klik untuk reveal"
+                  } kartu ${card.code} - ${card.title}`}
+                  className={`tcg-reveal-card-scene ${isRevealed ? "is-revealed" : ""}`}
+                >
+                  <div className="tcg-reveal-card-inner">
+                    {/* SISI DEPAN: KARTU SILUET MISTERI */}
+                    <div className="tcg-reveal-card-face tcg-face-front silhouette-card is-owned">
+                      <div className="tcg-card-topbar">
+                        <h3 className="tcg-card-name">{card.title}</h3>
+                        <span className="silhouette-status-pill is-owned">
+                          <Icon name="sparkles" size={13} /> Klik untuk Reveal
+                        </span>
+                      </div>
 
-                <SilhouetteArt
-                  variant={card.silhouetteVariant}
-                  customImageUrl={card.customImageUrl}
-                  alt={`${card.code} - ${card.title}`}
-                />
+                      <div className="tcg-stars-row" aria-label="Bintang 5">
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                      </div>
 
-                <div className="tcg-meta-row">
-                  <span className="tcg-edition">ENIGMA · 2027</span>
-                  <span className="silhouette-code">{card.code}</span>
-                </div>
+                      <SilhouetteArt
+                        variant={card.silhouetteVariant}
+                        customImageUrl={card.customImageUrl}
+                        alt={`${card.code} - ${card.title} (Siluet)`}
+                        badgeLabel="CLASSIFIED · KLIK REVEAL"
+                      />
 
-                <div className="tcg-lore-box">
-                  <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
-                  <p className="tcg-desc">{card.description}</p>
-                  <div className="tcg-stats-row">
-                    <span>PWR / {card.power ?? 2800}</span>
-                    <span>DEF / {card.defense ?? 2600}</span>
+                      <div className="tcg-meta-row">
+                        <span className="tcg-edition">ENIGMA · 2027</span>
+                        <span className="silhouette-code">{card.code}</span>
+                      </div>
+
+                      <div className="tcg-lore-box">
+                        <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
+                        <p className="tcg-desc">{card.description}</p>
+                        <div className="tcg-stats-row">
+                          <span>PWR / {card.power ?? 2800}</span>
+                          <span>DEF / {card.defense ?? 2600}</span>
+                        </div>
+                      </div>
+
+                      <div className="tcg-click-reveal-cta">
+                        <Icon name="sparkles" size={14} />
+                        <span>Klik Kartu untuk Reveal Wujud Karakter</span>
+                      </div>
+                    </div>
+
+                    {/* SISI BELAKANG: KARTU REVEAL KARAKTER ASLI */}
+                    <div className="tcg-reveal-card-face tcg-face-back silhouette-card is-revealed-card">
+                      <span className="tcg-holo-shimmer" aria-hidden="true" />
+                      <div className="tcg-card-topbar is-revealed-topbar">
+                        <h3 className="tcg-card-name">{card.title}</h3>
+                        <span className="silhouette-status-pill is-revealed-pill">
+                          <Icon name="check" size={13} /> Karakter Terungkap
+                        </span>
+                      </div>
+
+                      <div className="tcg-stars-row is-revealed-stars" aria-label="Bintang 5">
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                        <span>★</span>
+                      </div>
+
+                      <SilhouetteArt
+                        variant={card.silhouetteVariant}
+                        customImageUrl={revealImgSrc}
+                        alt={`${card.code} - ${card.title} (Revealed)`}
+                        revealed
+                        badgeLabel="CHIEF DETECTIVE REVEALED"
+                      />
+
+                      <div className="tcg-meta-row">
+                        <span className="tcg-edition is-revealed-edition">
+                          ENIGMA · 2027 · REVEALED
+                        </span>
+                        <span className="silhouette-code">{card.code}</span>
+                      </div>
+
+                      <div className="tcg-lore-box is-revealed-lore">
+                        <span className="tcg-ability-tag">[ {card.roleHint} ]</span>
+                        <p className="tcg-desc">{card.description}</p>
+                        <div className="tcg-stats-row">
+                          <span>PWR / {card.power ?? 2800}</span>
+                          <span>DEF / {card.defense ?? 2600}</span>
+                        </div>
+                      </div>
+
+                      <div className="tcg-click-reveal-cta is-revealed-cta">
+                        <Icon name="refresh" size={13} />
+                        <span>Identitas Terungkap · Klik untuk Balik Kartu</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                </button>
+              );
+            })}
           </div>
         </section>
       </div>

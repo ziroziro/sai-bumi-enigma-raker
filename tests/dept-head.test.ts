@@ -34,6 +34,8 @@ test("DEFAULT_DEPT_HEAD_CARDS menyediakan tepat 7 kartu karakter unik bernama KA
     assert.ok(card.title.trim().length > 0);
     assert.ok(card.description.trim().length > 0);
     assert.ok(card.roleHint.trim().length > 0);
+    assert.equal(card.customImageUrl, `/images/karakter/karakter-${index + 1}.jpg`);
+    assert.equal(card.revealImageUrl, `/images/karakter/karakter-${index + 1}-reveal.jpg`);
   });
 });
 

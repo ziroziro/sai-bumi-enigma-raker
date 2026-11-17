@@ -5,19 +5,37 @@ interface SilhouetteArtProps {
   customImageUrl?: string | null;
   alt: string;
   compact?: boolean;
+  revealed?: boolean;
+  badgeLabel?: string;
 }
 
-export function SilhouetteArt({ variant, customImageUrl, alt, compact = false }: SilhouetteArtProps) {
+export function SilhouetteArt({
+  variant,
+  customImageUrl,
+  alt,
+  compact = false,
+  revealed = false,
+  badgeLabel,
+}: SilhouetteArtProps) {
   if (customImageUrl && customImageUrl.trim().length > 0) {
     return (
-      <div className={`silhouette-art-frame ${compact ? "is-compact" : ""}`}>
+      <div
+        className={`silhouette-art-frame ${compact ? "is-compact" : ""} ${
+          revealed ? "is-revealed-art" : ""
+        }`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={customImageUrl}
           alt={alt}
-          className="silhouette-custom-img"
+          className={`silhouette-custom-img ${revealed ? "is-revealed-img" : ""}`}
         />
         <span className="silhouette-vignette" aria-hidden="true" />
+        {badgeLabel && (
+          <span className={`silhouette-mystery-badge ${revealed ? "is-revealed-badge" : ""}`}>
+            {badgeLabel}
+          </span>
+        )}
       </div>
     );
   }
