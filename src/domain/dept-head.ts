@@ -92,10 +92,7 @@ export interface LockedDeptHeadView {
   };
   selectedCards: DeptHeadCard[];
   submittedAt: string;
-  announcementDateLabel: string;
 }
-
-export const DEPT_HEAD_ANNOUNCEMENT_LABEL = "Pengumuman resmi Chief Detective akan diumumkan pada tanggal 19/11.";
 
 export const submitDeptHeadSchema = z.object({
   cardIds: z.array(z.number().int().min(1).max(7)).min(1).max(2),
@@ -361,7 +358,6 @@ export function buildLockedDeptHeadView(
     },
     selectedCards,
     submittedAt: myRecord.submittedAt,
-    announcementDateLabel: DEPT_HEAD_ANNOUNCEMENT_LABEL,
   };
 }
 

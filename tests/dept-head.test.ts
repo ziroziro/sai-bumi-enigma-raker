@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_DEPT_HEAD_CARDS,
-  DEPT_HEAD_ANNOUNCEMENT_LABEL,
   buildDeptHeadSnapshot,
   buildLockedDeptHeadView,
   buildPublicDeptHeadSnapshot,
@@ -156,7 +155,7 @@ test("Public snapshot menyamarkan nama kelompok pemilih lain dan menyembunyikan 
   assert.deepEqual(publicForGroup1.mySelection?.cardIds, [1, 5]);
   assert.deepEqual(publicForGroup1.takenByOtherCardIds, []);
 
-  // Locked view hanya mengembalikan kartu yang dipilih kelompok tersebut + info pengumuman 19/11
+  // Locked view hanya mengembalikan kartu yang dipilih kelompok tersebut
   const lockedGroup1 = buildLockedDeptHeadView(full, 1);
   assert.ok(lockedGroup1);
   assert.equal(lockedGroup1.selectedCards.length, 2);
@@ -164,8 +163,6 @@ test("Public snapshot menyamarkan nama kelompok pemilih lain dan menyembunyikan 
     lockedGroup1.selectedCards.map((c) => c.id),
     [1, 5]
   );
-  assert.equal(lockedGroup1.announcementDateLabel, DEPT_HEAD_ANNOUNCEMENT_LABEL);
-  assert.ok(lockedGroup1.announcementDateLabel.includes("19/11"));
   assert.equal(buildLockedDeptHeadView(full, 2), null);
 });
 

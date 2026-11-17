@@ -2,7 +2,6 @@ import { getGroupTitle } from "@/config/event";
 import {
   buildLockedDeptHeadView,
   buildPublicDeptHeadSnapshot,
-  DEPT_HEAD_ANNOUNCEMENT_LABEL,
   submitDeptHeadSchema,
 } from "@/domain/dept-head";
 import { getDeptHeadGroupFromRequest } from "@/server/dept-head-auth";
@@ -80,7 +79,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         success: true,
-        message: `Terima kasih! Submit pilihan untuk ${getGroupTitle(groupNumber)} berhasil. ${DEPT_HEAD_ANNOUNCEMENT_LABEL}`,
+        message: `Terima kasih! Submit pilihan untuk ${getGroupTitle(groupNumber)} berhasil.`,
         lockedView,
       },
       { status: 201 }
