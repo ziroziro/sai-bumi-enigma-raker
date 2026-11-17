@@ -2,7 +2,7 @@ import Link from "next/link";
 import { event } from "@/config/event";
 import { Icon } from "./icon";
 
-export function SiteHeader({ activeNav }: { activeNav?: "quiz" | "pendaftaran" | "absensi" | "dept-head" }) {
+export function SiteHeader({ activeNav }: { activeNav?: "quiz" | "pendaftaran" | "absensi" | "chief-detective" }) {
   return (
     <header className="site-header">
       <Link href="/quiz" className="brand" aria-label={`${event.name}, menu utama`}>
@@ -39,8 +39,8 @@ export function SiteHeader({ activeNav }: { activeNav?: "quiz" | "pendaftaran" |
           Daftar Kelompok
         </Link>
         <Link
-          href="/dept-head"
-          className={`nav-link ${activeNav === "dept-head" ? "is-active" : ""}`}
+          href="/chief-detective"
+          className={`nav-link ${activeNav === "chief-detective" ? "is-active" : ""}`}
         >
           Pemilihan Chief Detective
         </Link>
