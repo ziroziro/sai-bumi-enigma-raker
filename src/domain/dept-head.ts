@@ -138,7 +138,7 @@ export const DEFAULT_DEPT_HEAD_CARDS: DeptHeadCard[] = [
     defense: 2600,
     silhouetteVariant: "fedora",
     customImageUrl: "/images/karakter/karakter-1.jpg",
-    revealImageUrl: "/images/karakter/karakter-1-reveal.jpg",
+    revealImageUrl: "/images/karakter/karakter-1-reveal.png",
   },
   {
     id: 2,
