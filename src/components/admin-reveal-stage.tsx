@@ -7,15 +7,47 @@ import { SilhouetteArt } from "@/components/silhouette-art";
 import { officialGroups } from "@/config/event";
 import type { DeptHeadCard, DeptHeadStateSnapshot } from "@/domain/dept-head";
 
+const REVEAL_GROUP_ORDER = [3, 2, 4, 1] as const;
+
 const GROUP_STAMP_THEMES: Record<
   number,
-  { shortName: string; accentClass: string; colorLabel: string }
+  { shortName: string; teamLabel: string; accentClass: string; colorLabel: string }
 > = {
-  1: { shortName: "LUPIN", accentClass: "is-group-1", colorLabel: "Kelompok 1" },
-  2: { shortName: "JUBUN", accentClass: "is-group-2", colorLabel: "Kelompok 2" },
-  3: { shortName: "CONAN", accentClass: "is-group-3", colorLabel: "Kelompok 3" },
-  4: { shortName: "HOLMES", accentClass: "is-group-4", colorLabel: "Kelompok 4" },
+  3: {
+    shortName: "CONAN",
+    teamLabel: "Team Conan",
+    accentClass: "is-group-3",
+    colorLabel: "Kelompok 3",
+  },
+  2: {
+    shortName: "DETECTIVE JUBUN",
+    teamLabel: "Team Detective Jubun",
+    accentClass: "is-group-2",
+    colorLabel: "Kelompok 2",
+  },
+  4: {
+    shortName: "HOLMES",
+    teamLabel: "Team Holmes",
+    accentClass: "is-group-4",
+    colorLabel: "Kelompok 4",
+  },
+  1: {
+    shortName: "LUPIN",
+    teamLabel: "Team Lupin",
+    accentClass: "is-group-1",
+    colorLabel: "Kelompok 1",
+  },
 };
+
+const ORDERED_REVEAL_GROUPS = REVEAL_GROUP_ORDER.map((num) => {
+  const found = officialGroups.find((g) => g.number === num) ?? officialGroups[0];
+  const theme = GROUP_STAMP_THEMES[num];
+  return {
+    number: found.number,
+    name: found.name,
+    title: theme?.teamLabel ?? found.title,
+  };
+});
 
 function getAdminHeaders(): HeadersInit {
   const token =
@@ -90,7 +122,7 @@ export function AdminRevealStage() {
   const [busy, setBusy] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
-  const [activeGroupNumber, setActiveGroupNumber] = useState<number | null>(1);
+  const [activeGroupNumber, setActiveGroupNumber] = useState<number | null>(REVEAL_GROUP_ORDER[0]);
   const [draftCardIds, setDraftCardIds] = useState<number[]>([]);
   const [freshStampedIds, setFreshStampedIds] = useState<number[]>([]);
 
@@ -109,7 +141,7 @@ export function AdminRevealStage() {
   }, [snapshot]);
 
   const firstUnassignedGroup = useMemo(() => {
-    for (const g of officialGroups) {
+    for (const g of ORDERED_REVEAL_GROUPS) {
       if (!selectionByGroup.has(g.number)) {
         return g.number;
       }
@@ -316,7 +348,7 @@ export function AdminRevealStage() {
       }
       setDraftCardIds([]);
       setFreshStampedIds([]);
-      setActiveGroupNumber(1);
+      setActiveGroupNumber(REVEAL_GROUP_ORDER[0]);
     } catch {
       setStatusError("Terjadi kesalahan jaringan saat mereset cap.");
     } finally {
@@ -426,7 +458,7 @@ export function AdminRevealStage() {
 
   const activeGroupMeta =
     effectiveActiveGroup !== null
-      ? officialGroups.find((g) => g.number === effectiveActiveGroup) ?? null
+      ? ORDERED_REVEAL_GROUPS.find((g) => g.number === effectiveActiveGroup) ?? null
       : null;
 
   const renderStageCard = (card: DeptHeadCard) => {
@@ -623,11 +655,12 @@ export function AdminRevealStage() {
         </div>
 
         {/* 4 GROUP STAMP SELECTOR PILLS */}
-        <div className="reveal-group-pills" role="group" aria-label="Pilih kelompok pemberi cap">
-          {officialGroups.map((group) => {
+        <div className="reveal-group-pills" role="group" aria-label="Urutan reveal kelompok pemberi cap">
+          {ORDERED_REVEAL_GROUPS.map((group, index) => {
             const record = selectionByGroup.get(group.number);
             const theme = GROUP_STAMP_THEMES[group.number] ?? {
               shortName: group.name.toUpperCase(),
+              teamLabel: group.title,
               accentClass: "is-group-1",
               colorLabel: `Kelompok ${group.number}`,
             };
@@ -651,7 +684,7 @@ export function AdminRevealStage() {
                 >
                   <span className="chip-dot" />
                   <span className="chip-name">
-                    Kel {group.number}: {theme.shortName}
+                    {index + 1}. {theme.teamLabel}
                   </span>
                   <span className="chip-count">
                     {record
