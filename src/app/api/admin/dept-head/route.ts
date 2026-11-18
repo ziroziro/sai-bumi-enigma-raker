@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { getGroupTitle } from "@/config/event";
 import { DEFAULT_DEPT_HEAD_CARDS, updateDeptHeadCardSchema } from "@/domain/dept-head";
 import { getDeptHeadAccounts } from "@/server/dept-head-auth";
 import {
@@ -6,8 +8,15 @@ import {
   getDeptHeadSnapshot,
   resetAllDeptHeadSelections,
   setDeptHeadPageUnlocked,
+  submitDeptHeadSelection,
   updateDeptHeadCard,
 } from "@/server/dept-head-service";
+
+const adminAssignSchema = z.object({
+  action: z.literal("assign"),
+  groupNumber: z.number().int().min(1).max(4),
+  cardIds: z.array(z.number().int().min(1).max(7)).min(1).max(2),
+});
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,6 +67,27 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json().catch(() => ({}));
+
+    if (body && body.action === "assign") {
+      const parsed = adminAssignSchema.safeParse(body);
+      if (!parsed.success) {
+        return Response.json(
+          {
+            error: parsed.error.issues[0]?.message || "Data pemilihan kelompok tidak valid.",
+            code: "INVALID_ASSIGN_PAYLOAD",
+          },
+          { status: 400 }
+        );
+      }
+
+      const result = await submitDeptHeadSelection(parsed.data.groupNumber, parsed.data.cardIds);
+      return Response.json({
+        success: true,
+        message: `Cap ${getGroupTitle(parsed.data.groupNumber)} berhasil diberikan pada kartu pilihan.`,
+        snapshot: result.snapshot,
+      });
+    }
+
     const isPageUnlocked = Boolean(body?.isPageUnlocked);
     const snapshot = await setDeptHeadPageUnlocked(isPageUnlocked);
     return Response.json({
@@ -68,8 +98,11 @@ export async function POST(request: Request) {
       snapshot,
     });
   } catch (error) {
+    if (error instanceof DeptHeadServiceError) {
+      return Response.json({ error: error.message, code: error.code }, { status: error.status });
+    }
     const message =
-      error instanceof Error ? error.message : "Gagal mengubah status kunci halaman Chief Detective.";
+      error instanceof Error ? error.message : "Gagal memproses aksi Admin Chief Detective.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

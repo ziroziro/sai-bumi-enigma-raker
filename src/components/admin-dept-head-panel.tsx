@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Icon } from "@/components/icon";
 import { SilhouetteArt } from "@/components/silhouette-art";
@@ -73,7 +74,6 @@ export function AdminDeptHeadPanel({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<number | null>(null);
   const [draftCard, setDraftCard] = useState<DeptHeadCard | null>(null);
-  const [showPasswords, setShowPasswords] = useState(false);
 
   const selectionByGroup = useMemo(() => {
     const map = new Map<number, DeptHeadStateSnapshot["selections"][number]>();
@@ -247,48 +247,6 @@ export function AdminDeptHeadPanel({
     }
   }
 
-  async function handleTogglePageLock() {
-    if (!snapshot) return;
-    const nextUnlocked = !snapshot.isPageUnlocked;
-    setBusyAction("toggle-page-lock");
-    setNotice(null);
-    setErrorMsg(null);
-
-    try {
-      const res = await fetch("/api/admin/dept-head", {
-        method: "POST",
-        headers: getHeaders(),
-        credentials: "include",
-        body: JSON.stringify({ isPageUnlocked: nextUnlocked }),
-      });
-      const payload = (await res.json()) as {
-        error?: string;
-        message?: string;
-        snapshot?: DeptHeadStateSnapshot;
-      };
-      if (!res.ok) {
-        setErrorMsg(payload.error || "Gagal memperbarui status kunci halaman Chief Detective.");
-        return;
-      }
-      if (payload.snapshot) {
-        onSnapshotChange({
-          ...payload.snapshot,
-          accounts: snapshot.accounts,
-        });
-      }
-      setNotice(
-        payload.message ||
-          (nextUnlocked
-            ? "Halaman Chief Detective berhasil dibuka untuk peserta."
-            : "Halaman Chief Detective berhasil dikunci.")
-      );
-    } catch {
-      setErrorMsg("Terjadi kesalahan jaringan saat mengubah status kunci halaman.");
-    } finally {
-      setBusyAction(null);
-    }
-  }
-
   if (!snapshot) {
     return (
       <section className="panel admin-dept-head-section">
@@ -313,44 +271,18 @@ export function AdminDeptHeadPanel({
     <section className="admin-dept-head-section">
       <div className="panel admin-attendance-toolbar">
         <div className="toolbar-info">
-          <div className="dept-admin-status-row">
-            <h3>Rekap Pilihan Karakter Chief Detective Per Kelompok</h3>
-            <span
-              className={`dept-page-lock-badge ${
-                snapshot.isPageUnlocked ? "is-unlocked" : "is-locked"
-              }`}
-            >
-              <Icon name={snapshot.isPageUnlocked ? "check" : "lock"} size={13} />
-              <span>
-                {snapshot.isPageUnlocked
-                  ? "HALAMAN CHIEF DETECTIVE: DIBUKA"
-                  : "HALAMAN CHIEF DETECTIVE: TERKUNCI"}
-              </span>
-            </span>
-          </div>
+          <h3>Stage Reveal &amp; Rekap Chief Detective Per Kelompok</h3>
           <p>
-            Pantau karakter Chief Detective yang dipilih masing-masing kelompok (3 kelompok pertama memilih
-            2 karakter, kelompok ke-4 memilih 1 karakter) serta buka/kunci halaman untuk peserta.
+            Buka halaman Reveal Admin untuk menampilkan 7 kartu dalam satu layar, memberikan cap
+            lingkaran kelompok (2 kartu per kelompok, 1 kartu terakhir), dan memutar animasi Reveal
+            7 kartu sekaligus.
           </p>
         </div>
         <div className="toolbar-buttons-cluster">
-          <button
-            type="button"
-            className={`btn-admin-action ${
-              snapshot.isPageUnlocked ? "btn-lock-dept-page" : "btn-unlock-dept-page"
-            }`}
-            onClick={() => void handleTogglePageLock()}
-            disabled={busyAction !== null}
-          >
-            <Icon name={snapshot.isPageUnlocked ? "lock" : "check"} size={16} />
-            <span>
-              {busyAction === "toggle-page-lock"
-                ? "Memproses..."
-                : snapshot.isPageUnlocked
-                ? "Kunci Halaman Chief Detective"
-                : "Buka Halaman Chief Detective"}
-            </span>
-          </button>
+          <Link href="/admin-enigma/reveal" className="btn-primary-link btn-open-reveal-stage">
+            <Icon name="sparkles" size={16} />
+            <span>Buka Halaman Reveal (7 Kartu)</span>
+          </Link>
           <button
             type="button"
             className="btn-admin-action"
@@ -455,44 +387,6 @@ export function AdminDeptHeadPanel({
           );
         })}
       </div>
-
-      {snapshot.accounts && snapshot.accounts.length > 0 && (
-        <div className="panel admin-dept-cards-manager">
-          <div className="admin-dept-manager-header">
-            <div>
-              <h3>Akun Login Kelompok (Halaman Pemilihan Chief Detective)</h3>
-              <p>
-                Bagikan email &amp; password berikut ke perwakilan masing-masing kelompok. Satu
-                kelompok menggunakan satu akun khusus untuk memilih karakter.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-admin-action"
-              onClick={() => setShowPasswords((v) => !v)}
-            >
-              <Icon name="lock" size={14} />
-              <span>{showPasswords ? "Sembunyikan Password" : "Tampilkan Password"}</span>
-            </button>
-          </div>
-
-          <div className="admin-accounts-grid">
-            {snapshot.accounts.map((acc) => (
-              <div key={acc.groupNumber} className="admin-account-item">
-                <span className="eyebrow">{acc.groupTitle}</span>
-                <div className="admin-account-row">
-                  <span>Email:</span>
-                  <code>{acc.email}</code>
-                </div>
-                <div className="admin-account-row">
-                  <span>Password:</span>
-                  <code>{showPasswords ? acc.password : "••••••••••"}</code>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="panel admin-dept-cards-manager">
         <div className="admin-dept-manager-header">

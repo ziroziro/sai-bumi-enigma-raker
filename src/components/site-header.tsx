@@ -42,7 +42,7 @@ export function SiteHeader({ activeNav }: { activeNav?: "quiz" | "pendaftaran" |
           href="/chief-detective"
           className={`nav-link ${activeNav === "chief-detective" ? "is-active" : ""}`}
         >
-          Pemilihan Chief Detective
+          Chief Detective
         </Link>
       </nav>
       <span className="header-year">

@@ -1,43 +1,40 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
-import { DeptHeadApp } from "@/components/dept-head-app";
-import { buildLockedDeptHeadView, buildPublicDeptHeadSnapshot } from "@/domain/dept-head";
-import { getDeptHeadGroupFromCookies } from "@/server/dept-head-auth";
+import { DeptHeadApp, type PublicSilhouetteCard } from "@/components/dept-head-app";
 import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Pemilihan Chief Detective | Sai Bumi Enigma",
+  title: "Chief Detective | Sai Bumi Enigma",
   description:
-    "Masuk dengan akun kelompok untuk mengamati 7 karakter dan menentukan Chief Detective di The Sai Bumi Enigma.",
+    "Profil 7 siluet kartu karakter misterius Chief Detective di The Sai Bumi Enigma.",
 };
 
 export default async function ChiefDetectivePage() {
   const fullSnapshot = await getDeptHeadSnapshot();
-  const isPageUnlocked = fullSnapshot.isPageUnlocked;
-  const authenticatedGroup = isPageUnlocked ? await getDeptHeadGroupFromCookies() : null;
-  const initialLockedView =
-    isPageUnlocked && authenticatedGroup
-      ? buildLockedDeptHeadView(fullSnapshot, authenticatedGroup)
-      : null;
-  const initialSnapshot =
-    isPageUnlocked && authenticatedGroup && !initialLockedView
-      ? buildPublicDeptHeadSnapshot(fullSnapshot, authenticatedGroup)
-      : null;
+
+  // Hanya kirim data siluet (tanpa realName dan tanpa revealImageUrl) untuk tampilan read-only
+  const silhouetteCards: PublicSilhouetteCard[] = fullSnapshot.cards.map((card) => ({
+    id: card.id,
+    code: card.code,
+    title: card.title,
+    roleHint: card.roleHint,
+    description: card.description,
+    power: card.power,
+    defense: card.defense,
+    silhouetteVariant: card.silhouetteVariant,
+    customImageUrl: card.customImageUrl,
+  }));
 
   return (
     <>
       <a href="#main" className="skip-link">
-        Langsung ke halaman pemilihan Chief Detective
+        Langsung ke daftar kartu karakter Chief Detective
       </a>
       <SiteHeader activeNav="chief-detective" />
       <main id="main">
-        <DeptHeadApp
-          initialSnapshot={initialSnapshot}
-          initialLockedView={initialLockedView}
-          initialIsPageUnlocked={isPageUnlocked}
-        />
+        <DeptHeadApp cards={silhouetteCards} />
       </main>
       <footer className="site-footer">
         <div className="tapis-line" aria-hidden="true" />

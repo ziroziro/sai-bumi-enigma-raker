@@ -1,125 +1,47 @@
-import { getGroupTitle } from "@/config/event";
-import {
-  buildLockedDeptHeadView,
-  buildPublicDeptHeadSnapshot,
-  submitDeptHeadSchema,
-} from "@/domain/dept-head";
-import { getDeptHeadGroupFromRequest } from "@/server/dept-head-auth";
-import {
-  DeptHeadServiceError,
-  getDeptHeadSnapshot,
-  submitDeptHeadSelection,
-} from "@/server/dept-head-service";
+import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const fullSnapshot = await getDeptHeadSnapshot();
-    if (!fullSnapshot.isPageUnlocked) {
-      return Response.json(
-        {
-          isPageUnlocked: false,
-          error: "Halaman Pemilihan Chief Detective saat ini masih dikunci oleh Admin.",
-        },
-        {
-          status: 403,
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
-        }
-      );
-    }
+    const cards = fullSnapshot.cards.map((card) => ({
+      id: card.id,
+      code: card.code,
+      title: card.title,
+      roleHint: card.roleHint,
+      description: card.description,
+      power: card.power,
+      defense: card.defense,
+      silhouetteVariant: card.silhouetteVariant,
+      customImageUrl: card.customImageUrl,
+    }));
 
-    const groupNumber = getDeptHeadGroupFromRequest(request);
-    if (!groupNumber) {
-      return Response.json(
-        {
-          isPageUnlocked: true,
-          error: "Silakan login menggunakan email dan password kelompok Anda terlebih dahulu.",
-        },
-        { status: 401 }
-      );
-    }
-
-    const publicSnapshot = buildPublicDeptHeadSnapshot(fullSnapshot, groupNumber);
-    if (publicSnapshot.mySelection) {
-      return Response.json(
-        {
-          isPageUnlocked: true,
-          alreadySubmitted: true,
-          lockedView: buildLockedDeptHeadView(fullSnapshot, groupNumber),
-        },
-        {
-          headers: {
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-          },
-        }
-      );
-    }
-
-    return Response.json(publicSnapshot, {
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+    return Response.json(
+      {
+        readonly: true,
+        cards,
       },
-    });
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      }
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal memuat data pemilihan karakter.";
+    const message = error instanceof Error ? error.message : "Gagal memuat data karakter.";
     return Response.json({ error: message }, { status: 500 });
   }
 }
 
-export async function POST(request: Request) {
-  const fullSnapshot = await getDeptHeadSnapshot();
-  if (!fullSnapshot.isPageUnlocked) {
-    return Response.json(
-      {
-        isPageUnlocked: false,
-        error: "Halaman Pemilihan Chief Detective saat ini sedang dikunci oleh Admin.",
-        code: "PAGE_LOCKED",
-      },
-      { status: 403 }
-    );
-  }
-
-  const groupNumber = getDeptHeadGroupFromRequest(request);
-  if (!groupNumber) {
-    return Response.json(
-      { error: "Sesi login kelompok berakhir atau belum masuk. Silakan login kembali.", code: "UNAUTHORIZED" },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const rawBody = await request.json().catch(() => null);
-    const parsed = submitDeptHeadSchema.safeParse(rawBody);
-    if (!parsed.success) {
-      return Response.json(
-        {
-          error: parsed.error.issues[0]?.message || "Format data pemilihan karakter tidak valid.",
-          code: "INVALID_PAYLOAD",
-        },
-        { status: 400 }
-      );
-    }
-
-    const result = await submitDeptHeadSelection(groupNumber, parsed.data.cardIds);
-    const lockedView = buildLockedDeptHeadView(result.snapshot, groupNumber);
-
-    return Response.json(
-      {
-        success: true,
-        message: `Terima kasih! Submit pilihan untuk ${getGroupTitle(groupNumber)} berhasil.`,
-        lockedView,
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    if (error instanceof DeptHeadServiceError) {
-      return Response.json({ error: error.message, code: error.code }, { status: error.status });
-    }
-    const message = error instanceof Error ? error.message : "Gagal menyimpan pilihan karakter.";
-    return Response.json({ error: message, code: "INTERNAL_ERROR" }, { status: 500 });
-  }
+export async function POST() {
+  return Response.json(
+    {
+      error:
+        "Pemilihan Chief Detective tidak lagi dilakukan dari halaman peserta. Silakan gunakan halaman Reveal Admin.",
+      code: "READONLY_PAGE",
+    },
+    { status: 403 }
+  );
 }
