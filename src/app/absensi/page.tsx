@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Absensi Agent — The Sai Bumi Enigma",
-  description: "Sistem absensi dan identitas detektif resmi The Sai Bumi Enigma 2026 dengan verifikasi lokasi dan pemindai barcode / QR code.",
+  description: "Sistem absensi dan identitas detektif resmi The Sai Bumi Enigma 2026 melalui pemindai barcode / QR code oleh admin.",
 };
 
 export default function AttendancePage() {

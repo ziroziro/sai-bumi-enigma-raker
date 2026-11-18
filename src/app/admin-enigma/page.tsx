@@ -15,7 +15,6 @@ import { generateCode128Svg } from "@/domain/barcode-svg";
 import { generateQrSvg } from "@/domain/qrcode-svg";
 import { Icon } from "@/components/icon";
 
-const DEVICE_LOCK_KEY = "sai_bumi_enigma_device_attendance_lock";
 const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
 
 function getAdminHeaders(): HeadersInit {
@@ -220,23 +219,9 @@ export default function AdminPage() {
     }
   }
 
-  // Reset Device Lock on this browser without deleting historical attendance
-  function handleResetDeviceLockOnBrowser() {
-    try {
-      localStorage.removeItem(DEVICE_LOCK_KEY);
-      localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
-      setAttendanceNotice(
-        "Kunci sesi perangkat pada browser ini berhasil dibuka. Perangkat ini kini dapat digunakan untuk absensi ulang tanpa menghapus data absensi peserta yang sudah tersimpan."
-      );
-      setTimeout(() => setAttendanceNotice(null), 8000);
-    } catch {
-      alert("Gagal mereset kunci perangkat.");
-    }
-  }
-
   // Delete attendance of a specific participant
   async function handleDeleteSingleAttendance(nik: string, name: string) {
-    if (!confirm(`Hapus status kehadiran untuk ${name} (${nik})? Kunci perangkat peserta ini akan otomatis ter-reset sehingga dia dapat melakukan absensi ulang.`)) {
+    if (!confirm(`Hapus status kehadiran untuk ${name} (${nik})? Peserta ini dapat di-scan absensi ulang.`)) {
       return;
     }
 
@@ -251,7 +236,7 @@ export default function AdminPage() {
         const data = await res.json();
         setAttendanceRecords(data.records || {});
         setAttendanceNotice(
-          `Kehadiran ${name} (${nik}) berhasil dihapus. Kunci perangkat peserta telah dibuka kembali (unlocked) sehingga dia dapat melakukan absensi ulang.`
+          `Kehadiran ${name} (${nik}) berhasil dihapus. Peserta kini dapat di-scan absensi ulang.`
         );
         setTimeout(() => setAttendanceNotice(null), 7000);
       } else {
@@ -266,7 +251,7 @@ export default function AdminPage() {
   async function handleResetAllAttendance() {
     if (
       !confirm(
-        "PERINGATAN: Apakah Anda yakin ingin mengosongkan / menghapus SELURUH data kehadiran 35 peserta? Kunci semua perangkat peserta akan otomatis di-reset sehingga semua peserta dapat melakukan absensi ulang."
+        "PERINGATAN: Apakah Anda yakin ingin mengosongkan / menghapus SELURUH data kehadiran 35 peserta? Semua peserta dapat di-scan absensi ulang."
       )
     ) {
       return;
@@ -281,10 +266,9 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setAttendanceRecords({});
-        localStorage.removeItem(DEVICE_LOCK_KEY);
         localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
         setAttendanceNotice(
-          "Seluruh data absensi peserta berhasil dikosongkan. Kunci di semua perangkat peserta otomatis ter-reset sehingga semua peserta dapat melakukan absensi ulang."
+          "Seluruh data absensi peserta berhasil dikosongkan. Semua peserta kini dapat di-scan absensi ulang."
         );
         setTimeout(() => setAttendanceNotice(null), 7000);
       } else {
@@ -895,24 +879,14 @@ export default function AdminPage() {
           <div className="admin-attendance-toolbar panel">
             <div className="toolbar-info">
               <span className="eyebrow">PENGELOLAAN DATA ABSENSI</span>
-              <h3>Kendali Sesi & Data Kehadiran</h3>
+              <h3>Kendali Data Kehadiran</h3>
               <p>
-                Gunakan tombol buka kunci perangkat untuk memungkinkan pengujian ulang tanpa
-                menghapus data kehadiran peserta lain yang telah tercatat.
+                Unduh rekap kehadiran (.xlsx), unduh paket barcode peserta (.zip), atau reset data
+                absensi seluruh peserta.
               </p>
             </div>
 
             <div className="toolbar-buttons-cluster">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={handleResetDeviceLockOnBrowser}
-                title="Buka kunci perangkat di browser ini tanpa menghapus absensi lama"
-              >
-                <Icon name="refresh" size={16} />
-                <span>Buka Kunci Perangkat Ini (Reset Sesi)</span>
-              </button>
-
               <button
                 type="button"
                 className="button button-gold"

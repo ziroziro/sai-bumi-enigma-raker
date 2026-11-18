@@ -4,21 +4,13 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import type { Html5Qrcode } from "html5-qrcode";
 import {
   ATTENDANCE_ROSTER,
-  ATTENDANCE_TARGET_LOCATION,
-  calculateDistanceMeters,
   findMemberByBarcode,
   type AttendanceMember,
 } from "@/domain/attendance";
 import { Icon } from "./icon";
 
 const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
-const DEVICE_LOCK_KEY = "sai_bumi_enigma_device_attendance_lock";
-
-interface DeviceLock {
-  nik: string;
-  nama: string;
-  timestamp: string;
-}
+const LEGACY_DEVICE_LOCK_KEY = "sai_bumi_enigma_device_attendance_lock";
 
 function getStoredRecords(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -36,30 +28,6 @@ function saveStoredRecords(records: Record<string, string>) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(ATTENDANCE_STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // ignore
-  }
-}
-
-function getStoredDeviceLock(): DeviceLock | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(DEVICE_LOCK_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.nik === "string" && typeof parsed.nama === "string") {
-      return parsed as DeviceLock;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function saveStoredDeviceLock(lock: DeviceLock) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(DEVICE_LOCK_KEY, JSON.stringify(lock));
   } catch {
     // ignore
   }
@@ -163,125 +131,12 @@ export function AttendanceApp() {
   // Attendance Records: NIK -> ISO timestamp
   const [, setRecords] = useState<Record<string, string>>({});
 
-  // Device Lock State (Silent 1 device = 1 user)
-  const [deviceLock, setDeviceLock] = useState<DeviceLock | null>(null);
-
   // Scanner state
   const [scanError, setScanError] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   // Html5Qrcode Scanner instance ref & in-flight guard
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isProcessingScanRef = useRef(false);
-
-  // Geolocation state (PT. Tunas Dwipa Matra - TDM)
-  const [userLocation, setUserLocation] = useState<{
-    latitude: number;
-    longitude: number;
-    accuracy: number;
-    distanceMeters: number;
-    isWithinRange: boolean;
-    timestamp: number;
-  } | null>(null);
-  const [locationStatus, setLocationStatus] = useState<
-    "idle" | "checking" | "granted" | "denied" | "out_of_range"
-  >("idle");
-  const [locationError, setLocationError] = useState<string | null>(null);
-
-  // Detect live device GPS location
-  const detectDeviceLocation = useCallback(async (): Promise<boolean> => {
-    if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setLocationStatus("denied");
-      setLocationError("Browser atau perangkat Anda tidak mendukung fitur deteksi lokasi GPS.");
-      return false;
-    }
-
-    setLocationStatus("checking");
-    setLocationError(null);
-
-    return new Promise<boolean>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude, accuracy } = position.coords;
-          const distance = calculateDistanceMeters(
-            latitude,
-            longitude,
-            ATTENDANCE_TARGET_LOCATION.latitude,
-            ATTENDANCE_TARGET_LOCATION.longitude
-          );
-          const withinRange = distance <= ATTENDANCE_TARGET_LOCATION.maxRadiusMeters;
-
-          setUserLocation({
-            latitude,
-            longitude,
-            accuracy: Math.round(accuracy || 0),
-            distanceMeters: distance,
-            isWithinRange: withinRange,
-            timestamp: Date.now(),
-          });
-
-          if (withinRange) {
-            setLocationStatus("granted");
-            resolve(true);
-          } else {
-            setLocationStatus("out_of_range");
-            setLocationError(
-              `Perangkat Anda terdeteksi berjarak ${distance.toLocaleString(
-                "id-ID"
-              )} meter dari PT. Tunas Dwipa Matra (TDM). Absensi HANYA DAPAT DILAKUKAN di lokasi acara (radius maksimal ${
-                ATTENDANCE_TARGET_LOCATION.maxRadiusMeters
-              }m).`
-            );
-            resolve(false);
-          }
-        },
-        (err) => {
-          let msg = "Akses lokasi diperlukan untuk memverifikasi kehadiran di area acara PT. Tunas Dwipa Matra.";
-          if (err.code === err.PERMISSION_DENIED) {
-            msg = "Izin lokasi GPS ditolak oleh browser/perangkat. Harap aktifkan izin lokasi di pengaturan browser agar dapat absensi.";
-          } else if (err.code === err.POSITION_UNAVAILABLE) {
-            msg = "Sinyal GPS perangkat tidak terdeteksi. Pastikan GPS/Location perangkat telah diaktifkan.";
-          } else if (err.code === err.TIMEOUT) {
-            msg = "Waktu permintaan lokasi GPS habis. Silakan klik 'Deteksi Ulang GPS Perangkat'.";
-          }
-          setLocationStatus("denied");
-          setLocationError(msg);
-          resolve(false);
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
-      );
-    });
-  }, []);
-
-  // Run device location detection automatically on mount
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void detectDeviceLocation();
-    }, 120);
-    return () => clearTimeout(timer);
-  }, [detectDeviceLocation]);
-
-  // Check GPS Location - Strict Enforcement
-  const verifyLocation = useCallback(
-    async (allowSimulationBypass = false): Promise<boolean> => {
-      // Allow bypass ONLY if in localhost and simulation mode explicitly checks bypass
-      if (allowSimulationBypass && isLocalhost) {
-        return true;
-      }
-
-      // If userLocation was determined very recently (< 15 seconds ago) and is within range
-      if (
-        userLocation &&
-        userLocation.isWithinRange &&
-        Date.now() - userLocation.timestamp < 15000
-      ) {
-        return true;
-      }
-
-      // Otherwise re-check live GPS coordinates
-      return await detectDeviceLocation();
-    },
-    [isLocalhost, userLocation, detectDeviceLocation]
-  );
 
   // Magnifying glass radar searching state
   const [isSearchingAgent, setIsSearchingAgent] = useState(false);
@@ -297,79 +152,27 @@ export function AttendanceApp() {
   // Simulation Mode State (Khusus Pengujian / Testing)
   const [isSimulationOpen, setIsSimulationOpen] = useState(false);
   const [simulationNik, setSimulationNik] = useState("");
-  const [simulationBypassGps, setSimulationBypassGps] = useState(true);
-  const [simulationBypassDeviceLock, setSimulationBypassDeviceLock] = useState(true);
 
   // Sync attendance records from server continuously
   useEffect(() => {
+    try {
+      localStorage.removeItem(LEGACY_DEVICE_LOCK_KEY);
+    } catch {
+      // ignore
+    }
+
     async function syncRecords() {
       try {
         const storedRecs = getStoredRecords();
         setRecords(storedRecs);
-
-        const lock = getStoredDeviceLock();
-        if (lock) {
-          setDeviceLock(lock);
-          const member = findMemberByBarcode(lock.nik);
-          if (member) {
-            setScannedMember((prev) => prev ?? member);
-            setScannedTime((prev) => prev ?? lock.timestamp);
-            setTypedNameCount((prev) => (prev === 0 ? member.nama.length : prev));
-            setRevealedFieldsCount((prev) => (prev === 0 ? 6 : prev));
-          }
-        }
 
         const res = await fetch("/api/attendance", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           if (data.records && typeof data.records === "object") {
             const serverRecords: Record<string, string> = data.records;
-            const lastResetAt: string | null = data.lastResetAt ?? null;
-            const deletedNiks: string[] = Array.isArray(data.deletedNiks) ? data.deletedNiks : [];
-
-            const currentLock = getStoredDeviceLock();
-
-            // Check if this device lock was explicitly reset or deleted by admin:
-            let isLockInvalidated = false;
-            if (currentLock) {
-              // 1. If admin reset ALL attendance after this device checked in:
-              if (lastResetAt && new Date(lastResetAt).getTime() > new Date(currentLock.timestamp).getTime()) {
-                isLockInvalidated = true;
-              }
-              // 2. If admin explicitly deleted this specific participant:
-              if (deletedNiks.includes(currentLock.nik)) {
-                isLockInvalidated = true;
-              }
-            }
-
-            if (isLockInvalidated) {
-              // Valid admin unlock: clear device lock and reset UI so user can re-attend
-              localStorage.removeItem(DEVICE_LOCK_KEY);
-              localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
-              setDeviceLock(null);
-              setScannedMember(null);
-              setScannedTime(null);
-              setTypedNameCount(0);
-              setRevealedFieldsCount(0);
-              setRecords(serverRecords);
-              saveStoredRecords(serverRecords);
-            } else {
-              // Merge server records with client local records to guarantee resilience!
-              const mergedRecords = { ...getStoredRecords(), ...serverRecords };
-              if (currentLock) {
-                mergedRecords[currentLock.nik] = mergedRecords[currentLock.nik] || currentLock.timestamp;
-                // If server is missing this participant's attendance, heal the server!
-                if (!serverRecords[currentLock.nik]) {
-                  void fetch("/api/attendance", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nik: currentLock.nik, timestamp: currentLock.timestamp }),
-                  }).catch(() => {});
-                }
-              }
-              setRecords(mergedRecords);
-              saveStoredRecords(mergedRecords);
-            }
+            setRecords(serverRecords);
+            saveStoredRecords(serverRecords);
           }
         }
       } catch {
@@ -395,64 +198,48 @@ export function AttendanceApp() {
     };
   }, []);
 
-
-
   // Execute attendance check-in after radar search completes
-  const executeAttendanceConfirmation = useCallback(
-    (member: AttendanceMember) => {
-      const now = new Date();
-      const isoStr = now.toISOString();
+  const executeAttendanceConfirmation = useCallback((member: AttendanceMember) => {
+    const now = new Date();
+    const isoStr = now.toISOString();
 
-      // Record attendance locally
-      setRecords((prev) => {
-        const updated = {
-          ...prev,
-          [member.nik]: prev[member.nik] || isoStr,
-        };
-        saveStoredRecords(updated);
-        return updated;
+    // Record attendance locally
+    setRecords((prev) => {
+      const updated = {
+        ...prev,
+        [member.nik]: prev[member.nik] || isoStr,
+      };
+      saveStoredRecords(updated);
+      return updated;
+    });
+
+    // Sync attendance to server database with automatic retry for resilience
+    const payload = JSON.stringify({ nik: member.nik, timestamp: isoStr });
+    void fetch("/api/attendance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("sync_failed");
+      })
+      .catch(() => {
+        setTimeout(() => {
+          void fetch("/api/attendance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+          }).catch(() => {});
+        }, 800);
       });
 
-      // Sync attendance to server database with automatic retry for resilience
-      const payload = JSON.stringify({ nik: member.nik, timestamp: isoStr });
-      void fetch("/api/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("sync_failed");
-        })
-        .catch(() => {
-          setTimeout(() => {
-            void fetch("/api/attendance", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: payload,
-            }).catch(() => {});
-          }, 800);
-        });
-
-      // Save silent device lock if not already set
-      if (!deviceLock) {
-        const newLock: DeviceLock = {
-          nik: member.nik,
-          nama: member.nama,
-          timestamp: isoStr,
-        };
-        setDeviceLock(newLock);
-        saveStoredDeviceLock(newLock);
-      }
-
-      // Set active scanned member and initiate typewriter animation on ID Card
-      setScannedMember(member);
-      setScannedTime(isoStr);
-      setTypedNameCount(0);
-      setRevealedFieldsCount(0);
-      playScanBeep();
-    },
-    [deviceLock]
-  );
+    // Set active scanned member and initiate typewriter animation on ID Card
+    setScannedMember(member);
+    setScannedTime(isoStr);
+    setTypedNameCount(0);
+    setRevealedFieldsCount(0);
+    playScanBeep();
+  }, []);
 
   // Trigger searching radar animation with magnifying glass
   const triggerSearchAnimation = useCallback(
@@ -481,7 +268,7 @@ export function AttendanceApp() {
     [executeAttendanceConfirmation]
   );
 
-  // Main barcode scanning processing handler
+  // Main barcode scanning processing handler (multi-scan admin tanpa batas lokasi atau 1 device)
   const handleProcessBarcode = useCallback(
     async (barcodeText: string) => {
       const trimmed = barcodeText.trim();
@@ -494,38 +281,6 @@ export function AttendanceApp() {
       }
 
       setScanError(null);
-
-      // 1. Silent Device Lock Check: 1 Device = 1 User
-      let currentLock = getStoredDeviceLock();
-      if (currentLock) {
-        // Double check against current records: if the lock is no longer in attendance records, it was reset by admin!
-        const latestRecords = getStoredRecords();
-        if (!latestRecords[currentLock.nik]) {
-          localStorage.removeItem(DEVICE_LOCK_KEY);
-          currentLock = null;
-          setDeviceLock(null);
-        }
-      }
-
-      if (currentLock && currentLock.nik !== member.nik) {
-        setScanError(
-          `Perangkat ini sudah digunakan untuk absensi agen lain (${currentLock.nama}). Sesuai ketentuan, 1 device hanya dapat digunakan untuk absensi 1 orang.`
-        );
-        return;
-      }
-
-      // 2. Strict Geolocation Check (Target location PT. Tunas Dwipa Matra - TDM)
-      const isSimulationBypassed = isLocalhost && isSimulationOpen && simulationBypassGps;
-      const isLocationValid = await verifyLocation(isSimulationBypassed);
-      if (!isLocationValid) {
-        setScanError(
-          locationError ||
-            `ABSENSI DITOLAK: Perangkat Anda berada di luar area acara PT. Tunas Dwipa Matra (TDM). Jarak saat ini: ${
-              userLocation ? userLocation.distanceMeters.toLocaleString("id-ID") + "m" : "tidak terdeteksi"
-            } (Maksimal ${ATTENDANCE_TARGET_LOCATION.maxRadiusMeters}m).`
-        );
-        return;
-      }
 
       // Otomatis matikan kamera setelah pemindaian berhasil diverifikasi
       setIsCameraActive(false);
@@ -540,18 +295,10 @@ export function AttendanceApp() {
         }, 50);
       }
 
-      // 3. Trigger magnifying glass radar search animation
+      // Trigger magnifying glass radar search animation
       triggerSearchAnimation(member);
     },
-    [
-      isLocalhost,
-      isSimulationOpen,
-      simulationBypassGps,
-      verifyLocation,
-      locationError,
-      userLocation,
-      triggerSearchAnimation,
-    ]
+    [triggerSearchAnimation]
   );
 
   // Handle Simulation NIK Submission (Hanya di Localhost / Testing)
@@ -571,27 +318,6 @@ export function AttendanceApp() {
 
       setScanError(null);
 
-      // Check device lock unless bypassed for simulation
-      if (!simulationBypassDeviceLock) {
-        const currentLock = getStoredDeviceLock();
-        if (currentLock && currentLock.nik !== member.nik) {
-          setScanError(
-            `[SIMULASI] Perangkat ini sudah terkunci untuk agen lain (${currentLock.nama}). Centang "Bypass Kunci 1 Perangkat" untuk menguji agen lain.`
-          );
-          return;
-        }
-      }
-
-      // Check GPS location unless bypassed for simulation
-      const isLocationValid = await verifyLocation(simulationBypassGps);
-      if (!isLocationValid) {
-        setScanError(
-          locationError ||
-            `ABSENSI DITOLAK: Anda berada di luar area acara PT. Tunas Dwipa Matra (TDM) (radius maksimal ${ATTENDANCE_TARGET_LOCATION.maxRadiusMeters}m).`
-        );
-        return;
-      }
-
       // Otomatis matikan kamera jika sedang aktif
       setIsCameraActive(false);
 
@@ -607,30 +333,21 @@ export function AttendanceApp() {
       // Trigger radar animation & check-in
       triggerSearchAnimation(member);
     },
-    [
-      isLocalhost,
-      simulationNik,
-      simulationBypassDeviceLock,
-      simulationBypassGps,
-      verifyLocation,
-      locationError,
-      triggerSearchAnimation,
-    ]
+    [isLocalhost, simulationNik, triggerSearchAnimation]
   );
 
-  // Reset all attendance data & device session lock (Simulasi / Pengujian)
+  // Reset all attendance data (Simulasi / Pengujian)
   const handleResetAllAttendanceAndLock = useCallback(async () => {
     if (
       !confirm(
-        "Apakah Anda yakin ingin MENGHAPUS SEMUA DATA ABSENSI dan MERESET KUNCI PERANGKAT ini? Tindakan ini akan mengosongkan seluruh riwayat kehadiran."
+        "Apakah Anda yakin ingin MENGHAPUS SEMUA DATA ABSENSI? Tindakan ini akan mengosongkan seluruh riwayat kehadiran."
       )
     ) {
       return;
     }
 
-    localStorage.removeItem(DEVICE_LOCK_KEY);
+    localStorage.removeItem(LEGACY_DEVICE_LOCK_KEY);
     localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
-    setDeviceLock(null);
     setRecords({});
     setScannedMember(null);
     setScannedTime(null);
@@ -901,7 +618,7 @@ export function AttendanceApp() {
             <Icon name="compass" size={15} /> SISTEM ABSENSI AGENT · 2026
           </span>
           <span className="header-tag-live">
-            <span className="live-dot" /> VERIFIKASI LOKASI AKTIF
+            <span className="live-dot" /> MODE PEMINDAI ADMIN AKTIF
           </span>
         </div>
 
@@ -909,8 +626,8 @@ export function AttendanceApp() {
           Absensi Agent <em>The Sai Bumi Enigma</em>
         </h1>
         <p className="attendance-hero-desc">
-          Verifikasi kehadiran detektif resmi melalui pemindaian barcode fisik di lokasi acara PT.
-          Tunas Dwipa Matra (TDM).
+          Verifikasi kehadiran detektif resmi melalui pemindaian barcode / QR code tanda pengenal
+          peserta oleh admin.
         </p>
       </header>
 
@@ -924,132 +641,6 @@ export function AttendanceApp() {
               <span>PEMINDAI BARCODE RESMI</span>
             </div>
             <h2 className="controls-heading">Pindai Barcode Agen</h2>
-
-            {/* LOCATION VERIFICATION BOX */}
-            <div
-              className={`location-verification-card ${
-                locationStatus === "granted"
-                  ? "is-verified"
-                  : locationStatus === "out_of_range"
-                  ? "is-rejected"
-                  : locationStatus === "denied"
-                  ? "is-warning"
-                  : ""
-              }`}
-            >
-              <div className="loc-card-top">
-                <span className="loc-icon-pill">
-                  <Icon name="compass" size={16} />
-                </span>
-                <div>
-                  <strong>Lokasi Acara: PT. Tunas Dwipa Matra (TDM)</strong>
-                  <span className="loc-coords">
-                    Lat: {ATTENDANCE_TARGET_LOCATION.latitude.toFixed(5)}, Long:{" "}
-                    {ATTENDANCE_TARGET_LOCATION.longitude.toFixed(5)} · Radius Maks:{" "}
-                    {ATTENDANCE_TARGET_LOCATION.maxRadiusMeters}m
-                  </span>
-                </div>
-              </div>
-
-              {/* REAL DEVICE GPS DETAIL BOX */}
-              <div className="device-gps-info-box">
-                <div className="gps-row-header">
-                  <span className="gps-label">LOKASI PERANGKAT ANDA:</span>
-                  {locationStatus === "checking" ? (
-                    <span className="gps-status-pill pill-checking">
-                      <span className="spinner small" /> Memeriksa GPS...
-                    </span>
-                  ) : locationStatus === "granted" ? (
-                    <span className="gps-status-pill pill-valid">
-                      <Icon name="check" size={12} /> DI AREA ACARA (VALID)
-                    </span>
-                  ) : locationStatus === "out_of_range" ? (
-                    <span className="gps-status-pill pill-invalid">
-                      <Icon name="close" size={12} /> DI LUAR AREA ACARA
-                    </span>
-                  ) : locationStatus === "denied" ? (
-                    <span className="gps-status-pill pill-denied">
-                      <Icon name="close" size={12} /> IZIN GPS DITOLAK
-                    </span>
-                  ) : (
-                    <span className="gps-status-pill pill-standby">STANDBY</span>
-                  )}
-                </div>
-
-                {userLocation ? (
-                  <div className="gps-metrics-grid">
-                    <div className="gps-metric-item">
-                      <span className="metric-lbl">Koordinat Perangkat</span>
-                      <strong className="metric-val">
-                        {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}
-                      </strong>
-                    </div>
-                    <div className="gps-metric-item">
-                      <span className="metric-lbl">Akurasi GPS</span>
-                      <strong className="metric-val">±{userLocation.accuracy} meter</strong>
-                    </div>
-                    <div className="gps-metric-item">
-                      <span className="metric-lbl">Jarak ke Lokasi TDM</span>
-                      <strong
-                        className={`metric-val ${
-                          userLocation.isWithinRange ? "text-success" : "text-danger"
-                        }`}
-                      >
-                        {userLocation.distanceMeters.toLocaleString("id-ID")} meter
-                      </strong>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="gps-pending-text">
-                    {locationStatus === "checking"
-                      ? "Sedang membaca koordinat GPS perangkat Anda..."
-                      : "Koordinat GPS perangkat belum terdeteksi. Silakan klik tombol di bawah untuk memeriksa."}
-                  </p>
-                )}
-
-                {locationStatus === "out_of_range" && (
-                  <div className="loc-strict-alert">
-                    <Icon name="info" size={14} />
-                    <span>
-                      Absensi DITOLAK karena perangkat Anda berjarak{" "}
-                      <strong>
-                        {userLocation?.distanceMeters.toLocaleString("id-ID")} meter
-                      </strong>{" "}
-                      dari PT. Tunas Dwipa Matra (radius maksimal {ATTENDANCE_TARGET_LOCATION.maxRadiusMeters}m).
-                    </span>
-                  </div>
-                )}
-
-                {locationStatus === "denied" && locationError && (
-                  <div className="loc-strict-alert alert-denied">
-                    <Icon name="close" size={14} />
-                    <span>{locationError}</span>
-                  </div>
-                )}
-
-                <div className="loc-action-bar">
-                  <button
-                    type="button"
-                    className="btn-retry-loc"
-                    onClick={() => void detectDeviceLocation()}
-                    disabled={locationStatus === "checking"}
-                  >
-                    <Icon name="refresh" size={13} />
-                    <span>Deteksi Ulang GPS Perangkat</span>
-                  </button>
-
-                  <a
-                    href={ATTENDANCE_TARGET_LOCATION.mapUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-open-map"
-                  >
-                    <span>Buka Peta Lokasi TDM</span>
-                    <Icon name="arrow" size={13} />
-                  </a>
-                </div>
-              </div>
-            </div>
 
             {/* CAMERA TOGGLE & PREVIEW */}
             <div className="camera-viewport-wrap">
@@ -1166,38 +757,17 @@ export function AttendanceApp() {
                         </select>
                       </div>
 
-                      {/* Simulation Options (Bypass GPS & Bypass Device Lock) */}
-                      <div className="sim-options-grid">
-                        <label className="sim-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={simulationBypassGps}
-                            onChange={(e) => setSimulationBypassGps(e.target.checked)}
-                          />
-                          <span>Bypass Lokasi GPS (Khusus Simulasi)</span>
-                        </label>
-
-                        <label className="sim-checkbox-label">
-                          <input
-                            type="checkbox"
-                            checked={simulationBypassDeviceLock}
-                            onChange={(e) => setSimulationBypassDeviceLock(e.target.checked)}
-                          />
-                          <span>Bypass Kunci 1 Perangkat (Bisa Coba Peserta Lain)</span>
-                        </label>
-                      </div>
-
-                      {/* Clear All Attendance & Reset Lock Button */}
+                      {/* Clear All Attendance Button */}
                       <div style={{ marginTop: "14px", borderTop: "1px dashed #5a432f", paddingTop: "12px" }}>
                         <button
                           type="button"
                           className="btn-danger-outline"
                           onClick={() => void handleResetAllAttendanceAndLock()}
-                          title="Hapus semua data absensi dan reset sesi perangkat ini"
+                          title="Hapus semua data absensi"
                           style={{ width: "100%", justifyContent: "center", padding: "10px 14px", fontSize: "11px" }}
                         >
                           <Icon name="close" size={14} />
-                          <span>Hapus Semua Absensi & Reset Sesi Perangkat Ini</span>
+                          <span>Hapus Semua Data Absensi</span>
                         </button>
                       </div>
                     </form>
@@ -1241,17 +811,17 @@ export function AttendanceApp() {
                 <div className="standby-icon-ring">
                   <Icon name="compass" size={42} />
                 </div>
-                <h3>Pindai Barcode Identitas Anda</h3>
+                <h3>Pindai Barcode Identitas Agen</h3>
                 <p>
-                  Arahkan kamera ke barcode fisik tanda pengenal Anda untuk memverifikasi kehadiran
-                  resmi The Sai Bumi Enigma di lokasi acara.
+                  Arahkan kamera ke barcode fisik atau QR code tanda pengenal peserta untuk
+                  mencatat kehadiran resmi The Sai Bumi Enigma secara berurutan.
                 </p>
                 <div className="standby-hints">
                   <div className="hint-pill">
-                    <Icon name="check" size={14} /> Pemindaian Barcode Fisik Resmi
+                    <Icon name="check" size={14} /> Pemindaian Barcode &amp; QR Fisik Resmi
                   </div>
                   <div className="hint-pill">
-                    <Icon name="check" size={14} /> Lokasi Acara: PT. Tunas Dwipa Matra (TDM)
+                    <Icon name="check" size={14} /> Multi-Scan Admin Tanpa Batas Perangkat
                   </div>
                   <div className="hint-pill">
                     <Icon name="check" size={14} /> Verifikasi Kartu Detektif Resmi
@@ -1279,20 +849,19 @@ export function AttendanceApp() {
                       <span className="id-card-number">
                         NO. {String(scannedMember.no).padStart(2, "0")} / 35
                       </span>
-                      {isLocalhost && isSimulationOpen && (
-                        <button
-                          type="button"
-                          className="btn-sim-reset-card"
-                          onClick={() => {
-                            setScannedMember(null);
-                            setSimulationNik("");
-                          }}
-                          title="Kembali ke mode input / pilih peserta lain untuk simulasi"
-                        >
-                          <Icon name="refresh" size={13} />
-                          <span>Coba Agen Lain (Simulasi)</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="btn-sim-reset-card"
+                        onClick={() => {
+                          setScannedMember(null);
+                          setSimulationNik("");
+                          setIsCameraActive(true);
+                        }}
+                        title="Pindai barcode peserta berikutnya"
+                      >
+                        <Icon name="refresh" size={13} />
+                        <span>Pindai Berikutnya</span>
+                      </button>
                       {!isNameTypingComplete && (
                         <button
                           type="button"
@@ -1419,9 +988,6 @@ export function AttendanceApp() {
                                   })
                                 : "-"}{" "}
                               WIB
-                            </span>
-                            <span className="stamp-sub-loc">
-                              Lokasi: PT. Tunas Dwipa Matra (TDM)
                             </span>
                           </div>
                         </div>
