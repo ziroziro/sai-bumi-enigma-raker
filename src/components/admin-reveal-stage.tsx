@@ -20,7 +20,7 @@ const GROUP_STAMP_THEMES: Record<
     colorLabel: "Kelompok 3",
   },
   2: {
-    shortName: "DETECTIVE JUBUN",
+    shortName: "JUBUN",
     teamLabel: "Team Detective Jubun",
     accentClass: "is-group-2",
     colorLabel: "Kelompok 2",
