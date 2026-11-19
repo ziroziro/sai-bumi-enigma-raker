@@ -8,11 +8,10 @@ import type { QuizSubmissionRecord } from "@/domain/quiz";
 import {
   generateQuizScoresExcel,
   generateAttendanceExcel,
-  generateBarcodesZip,
+  generateBarcodesPngZip,
 } from "@/domain/excel-export";
 import { ATTENDANCE_ROSTER, type AttendanceMember } from "@/domain/attendance";
-import { generateCode128Svg } from "@/domain/barcode-svg";
-import { generateQrSvg } from "@/domain/qrcode-svg";
+import { generateQrBadgePngBlob, generateQrSvg } from "@/domain/qrcode-svg";
 import { Icon } from "@/components/icon";
 
 const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
@@ -366,70 +365,46 @@ export default function AdminPage() {
     }
   }
 
-  // Download All Barcodes ZIP archive (Semua 35 Barcode Peserta)
+  // Download All QR Badges PNG ZIP archive (Semua 35 Lencana QR Peserta)
   const [downloadingZip, setDownloadingZip] = useState(false);
 
-  const handleDownloadAllBarcodesZip = () => {
+  const handleDownloadAllBarcodesZip = async () => {
     setDownloadingZip(true);
     try {
-      const bytes = generateBarcodesZip(ATTENDANCE_ROSTER);
+      const bytes = await generateBarcodesPngZip(ATTENDANCE_ROSTER);
       const blob = new Blob([bytes as unknown as BlobPart], { type: "application/zip" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "Semua-Barcode-Peserta-Enigma.zip";
+      a.download = "Semua-Lencana-QR-Peserta-Enigma-PNG.zip";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      alert("Gagal mengunduh file ZIP barcode: " + (e instanceof Error ? e.message : "Error"));
+      alert("Gagal mengunduh file ZIP lencana PNG: " + (e instanceof Error ? e.message : "Error"));
     } finally {
       setDownloadingZip(false);
     }
   };
 
-  // Download Single Barcode SVG (Nama file: [Nama] - [NIK].svg)
-  const handleDownloadSingleBarcode = (member: AttendanceMember) => {
-    const svgString = generateCode128Svg(member.barcode, {
-      height: 70,
-      barWidth: 2,
-      color: "#111111",
-      bgColor: "#ffffff",
-      showText: true,
-    });
-    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const safeName = member.nama.replace(/[/\\?%*:|"<>]/g, "").trim();
-    const safeNik = member.nik.replace(/[/\\?%*:|"<>]/g, "").trim();
-    a.download = `${safeName} - ${safeNik}.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  // Download QR Code SVG (Nama file: [Nama] - [NIK] - QR.svg)
-  const handleDownloadQr = (member: AttendanceMember) => {
-    const svgString = generateQrSvg(member.nik, {
-      size: 360,
-      color: "#161314",
-      bgColor: "#ffffff",
-      quietZone: 4,
-    });
-    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const safeName = member.nama.replace(/[/\\?%*:|"<>]/g, "").trim();
-    const safeNik = member.nik.replace(/[/\\?%*:|"<>]/g, "").trim();
-    a.download = `${safeName} - ${safeNik} - QR.svg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  // Download QR Code Detective Badge PNG (Nama file: [Nama] - [NIK].png)
+  const handleDownloadQr = async (member: AttendanceMember) => {
+    try {
+      const pngBlob = await generateQrBadgePngBlob(member.nik, 2);
+      const url = URL.createObjectURL(pngBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeName = member.nama.replace(/[/\\?%*:|"<>]/g, "").trim();
+      const safeNik = member.nik.replace(/[/\\?%*:|"<>]/g, "").trim();
+      a.download = `${safeName} - ${safeNik}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Gagal mengunduh file PNG lencana QR: " + (e instanceof Error ? e.message : "Error"));
+    }
   };
 
   // Filtered submissions
@@ -901,10 +876,10 @@ export default function AdminPage() {
                 className="button button-gold btn-download-all-zip"
                 onClick={handleDownloadAllBarcodesZip}
                 disabled={downloadingZip}
-                title="Unduh seluruh 35 barcode peserta (file SVG dengan nama [Nama] - [NIK].svg) dalam 1 arsip ZIP"
+                title="Unduh seluruh 35 lencana QR peserta (file PNG dengan nama [Nama] - [NIK].png) dalam 1 arsip ZIP"
               >
                 <Icon name="download" size={16} />
-                <span>{downloadingZip ? "Menyiapkan ZIP..." : "Download Semua Barcode (.zip)"}</span>
+                <span>{downloadingZip ? "Menyiapkan ZIP PNG..." : "Download Semua Lencana PNG (.zip)"}</span>
               </button>
 
               <button
@@ -1075,10 +1050,10 @@ export default function AdminPage() {
                 className="button button-gold btn-download-all-zip"
                 onClick={handleDownloadAllBarcodesZip}
                 disabled={downloadingZip}
-                title="Unduh seluruh 35 barcode peserta (file SVG dengan nama [Nama] - [NIK].svg) dalam 1 arsip ZIP"
+                title="Unduh seluruh 35 lencana QR peserta (file PNG dengan nama [Nama] - [NIK].png) dalam 1 arsip ZIP"
               >
                 <Icon name="download" size={16} />
-                <span>{downloadingZip ? "Menyiapkan ZIP..." : "Download Semua Barcode (.zip)"}</span>
+                <span>{downloadingZip ? "Menyiapkan ZIP PNG..." : "Download Semua Lencana PNG (.zip)"}</span>
               </button>
             </div>
           </div>
@@ -1111,61 +1086,26 @@ export default function AdminPage() {
                       <span className="badge-gender">{member.genderLabel}</span>
                     </div>
 
-                    {/* BARCODE PREVIEW */}
+                    {/* QR DETECTIVE BADGE DISPLAY ONLY */}
                     <div className="catalog-barcode-block">
-                      <span className="block-subheading">BARCODE IDENTITAS (CODE 128)</span>
                       <div
                         className="catalog-barcode-svg-box"
                         dangerouslySetInnerHTML={{
-                          __html: generateCode128Svg(member.barcode, {
-                            height: 48,
-                            barWidth: 1.6,
-                            color: "#161314",
-                            bgColor: "#ffffff",
-                            showText: true,
-                          }),
+                          __html: generateQrSvg(member.nik),
                         }}
                       />
-                    </div>
-
-                    {/* QR CODE DISPLAY */}
-                    <div className="catalog-qr-wrap">
-                      <div
-                        className="catalog-qr-svg"
-                        dangerouslySetInnerHTML={{
-                          __html: generateQrSvg(member.nik, {
-                            size: 140,
-                            color: "#161314",
-                            bgColor: "#ffffff",
-                            quietZone: 4,
-                          }),
-                        }}
-                      />
-                      <div className="catalog-barcode-mono">
-                        <span>KODE NIK:</span>
-                        <strong>{member.nik}</strong>
-                      </div>
                     </div>
                   </div>
 
-                  <div className="catalog-card-footer">
+                  <div className="catalog-card-footer is-single-btn">
                     <button
                       type="button"
                       className="btn-card-action btn-download-barcode"
-                      onClick={() => handleDownloadSingleBarcode(member)}
-                      title={`Download Barcode: ${member.nama} - ${member.nik}.svg`}
+                      onClick={() => void handleDownloadQr(member)}
+                      title={`Download Lencana QR: ${member.nama} - ${member.nik}.png`}
                     >
                       <Icon name="download" size={14} />
-                      <span>Barcode (.svg)</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-card-action btn-download-qr"
-                      onClick={() => handleDownloadQr(member)}
-                      title={`Download QR: ${member.nama} - ${member.nik} - QR.svg`}
-                    >
-                      <Icon name="download" size={14} />
-                      <span>QR (.svg)</span>
+                      <span>Download Lencana QR (.png)</span>
                     </button>
                   </div>
                 </div>
