@@ -1,8 +1,7 @@
 /**
  * Realistic Dark Antique Bronze-Brown Police Detective Shield Badge
  * with 3D Embossed / Relief QR Code Emerging Directly from the Shield Surface
- * (No Square Cover/Frame around the QR Code, No White Background, No Text/Names/Numbers)
- * + High-Resolution PNG Export Utilities.
+ * (100% Die-Cut Transparent PNG Export — Zero White Background Outside or Inside the Shield).
  */
 
 import * as zxingNamespace from "html5-qrcode/third_party/zxing-js.umd.js";
@@ -41,6 +40,9 @@ const zxing = ((raw.QRCodeWriter ? raw : (raw.default as Record<string, unknown>
   raw) as unknown as ZXingModule;
 
 const { QRCodeWriter, BarcodeFormat, EncodeHintType, QRCodeDecoderErrorCorrectionLevel } = zxing;
+
+export const OUTER_DETECTIVE_SHIELD_PATH =
+  "M 210 14 C 246 14, 270 34, 302 32 C 336 30, 362 48, 382 80 C 366 116, 376 160, 390 202 C 400 234, 388 310, 348 378 C 310 441, 253 470, 210 488 C 167 470, 110 441, 72 378 C 32 310, 20 234, 30 202 C 44 160, 54 116, 38 80 C 58 48, 84 30, 118 32 C 150 34, 174 14, 210 14 Z";
 
 function escapeXml(value: string): string {
   return value
@@ -179,7 +181,7 @@ export function generateQrSvg(
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 506" width="420" height="506" data-barcode="${escapeXml(
     text
-  )}" shape-rendering="geometricPrecision">
+  )}" shape-rendering="geometricPrecision" style="background:none;background-color:transparent;">
     <desc>${escapeXml(text)}</desc>
     <defs>
       <!-- Darker Antique Brown-Bronze Cast Outer Rim -->
@@ -231,101 +233,100 @@ export function generateQrSvg(
         <stop offset="100%" stop-color="#211608" />
       </radialGradient>
 
+      <!-- Die-Cut Outer Shield Clip (Nothing Exists Outside the Shield Shape) -->
+      <clipPath id="outerShieldDieCut-${uid}">
+        <path d="${OUTER_DETECTIVE_SHIELD_PATH}" />
+      </clipPath>
+
       <clipPath id="innerShieldClip-${uid}">
         <path d="M 210 38 C 242 38, 263 55, 292 53 C 321 51, 344 66, 360 93 C 346 125, 355 166, 367 204 C 375 231, 364 300, 329 362 C 296 419, 245 446, 210 462 C 175 446, 124 419, 91 362 C 56 300, 45 231, 53 204 C 65 166, 74 125, 60 93 C 76 66, 99 51, 128 53 C 157 55, 178 38, 210 38 Z" />
       </clipPath>
     </defs>
 
-    <!-- HEAVY AMBIENT DROP SHADOW -->
-    <path
-      d="M 210 18 C 246 18, 270 38, 302 36 C 336 34, 362 52, 382 84 C 366 120, 376 164, 390 206 C 400 238, 388 314, 348 382 C 310 445, 253 474, 210 492 C 167 474, 110 445, 72 382 C 32 314, 20 238, 30 206 C 44 164, 54 120, 38 84 C 58 52, 84 34, 118 36 C 150 38, 174 18, 210 18 Z"
-      fill="#040302"
-      opacity="0.7"
-      transform="translate(0, 6)"
-    />
+    <g clip-path="url(#outerShieldDieCut-${uid})">
+      <!-- OUTER CAST DARK ANTIQUE BRONZE SHIELD -->
+      <path
+        d="${OUTER_DETECTIVE_SHIELD_PATH}"
+        fill="url(#antiqueBrassOuter-${uid})"
+        stroke="#140d04"
+        stroke-width="4"
+      />
 
-    <!-- OUTER CAST DARK ANTIQUE BRONZE SHIELD -->
-    <path
-      d="M 210 14 C 246 14, 270 34, 302 32 C 336 30, 362 48, 382 80 C 366 116, 376 160, 390 202 C 400 234, 388 310, 348 378 C 310 441, 253 470, 210 488 C 167 470, 110 441, 72 378 C 32 310, 20 234, 30 202 C 44 160, 54 116, 38 80 C 58 48, 84 30, 118 32 C 150 34, 174 14, 210 14 Z"
-      fill="url(#antiqueBrassOuter-${uid})"
-      stroke="#140d04"
-      stroke-width="3"
-    />
+      <!-- STEPPED BEVEL RIM -->
+      <path
+        d="M 210 26 C 244 26, 266 44, 297 42 C 328 40, 353 57, 371 86 C 356 120, 365 163, 378 203 C 387 233, 376 305, 338 370 C 303 430, 249 458, 210 475 C 171 458, 117 430, 82 370 C 44 305, 33 233, 42 203 C 55 163, 64 120, 49 86 C 67 57, 92 40, 123 42 C 154 44, 176 26, 210 26 Z"
+        fill="url(#brassBevel-${uid})"
+        stroke="#b6945b"
+        stroke-width="1.1"
+        stroke-opacity="0.58"
+      />
 
-    <!-- STEPPED BEVEL RIM -->
-    <path
-      d="M 210 26 C 244 26, 266 44, 297 42 C 328 40, 353 57, 371 86 C 356 120, 365 163, 378 203 C 387 233, 376 305, 338 370 C 303 430, 249 458, 210 475 C 171 458, 117 430, 82 370 C 44 305, 33 233, 42 203 C 55 163, 64 120, 49 86 C 67 57, 92 40, 123 42 C 154 44, 176 26, 210 26 Z"
-      fill="url(#brassBevel-${uid})"
-      stroke="#b6945b"
-      stroke-width="1.1"
-      stroke-opacity="0.58"
-    />
+      <!-- PERIMETER RIVETS -->
+      ${rivetMarkup}
 
-    <!-- PERIMETER RIVETS -->
-    ${rivetMarkup}
+      <!-- UNIFIED CONTINUOUS DARK ANTIQUE BRONZE SHIELD BODY (NO INNER BOX) -->
+      <g clip-path="url(#innerShieldClip-${uid})">
+        <rect x="28" y="28" width="364" height="444" fill="url(#unifiedShieldMetal-${uid})" />
+        <path d="${sunburstPath}" fill="#2b1d0b" opacity="0.09" />
+        <rect x="28" y="28" width="364" height="444" fill="url(#brushedGrain-${uid})" />
+      </g>
 
-    <!-- UNIFIED CONTINUOUS DARK ANTIQUE BRONZE SHIELD BODY (NO INNER BOX) -->
-    <g clip-path="url(#innerShieldClip-${uid})">
-      <rect x="28" y="28" width="364" height="444" fill="url(#unifiedShieldMetal-${uid})" />
-      <path d="${sunburstPath}" fill="#2b1d0b" opacity="0.09" />
-      <rect x="28" y="28" width="364" height="444" fill="url(#brushedGrain-${uid})" />
+      <!-- INNER SHIELD CHISELED BORDER -->
+      <path
+        d="M 210 38 C 242 38, 263 55, 292 53 C 321 51, 344 66, 360 93 C 346 125, 355 166, 367 204 C 375 231, 364 300, 329 362 C 296 419, 245 446, 210 462 C 175 446, 124 419, 91 362 C 56 300, 45 231, 53 204 C 65 166, 74 125, 60 93 C 76 66, 99 51, 128 53 C 157 55, 178 38, 210 38 Z"
+        fill="none"
+        stroke="url(#antiqueBrassOuter-${uid})"
+        stroke-width="3"
+      />
+      <path
+        d="M 210 44 C 240 44, 260 60, 288 58 C 316 56, 338 70, 353 96 C 340 126, 348 166, 360 202 C 368 228, 357 295, 323 356 C 291 411, 243 438, 210 453 C 177 438, 129 411, 97 356 C 63 295, 52 228, 60 202 C 72 166, 80 126, 67 96 C 82 70, 104 56, 132 58 C 160 60, 180 44, 210 44 Z"
+        fill="none"
+        stroke="#1e1307"
+        stroke-width="1.3"
+        stroke-opacity="0.75"
+      />
+
+      <!-- TOP SCULPTED DETECTIVE 7-POINT STAR CREST & METAL WINGS -->
+      <path d="M 112 82 C 142 66, 166 70, 180 78 C 162 86, 138 89, 112 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
+      <path d="M 124 94 C 148 83, 168 85, 181 90 C 165 98, 144 99, 124 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
+      <path d="M 138 105 C 156 97, 171 98, 182 102 C 168 108, 152 109, 138 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
+
+      <path d="M 308 82 C 278 66, 254 70, 240 78 C 258 86, 282 89, 308 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
+      <path d="M 296 94 C 272 83, 252 85, 239 90 C 255 98, 276 99, 296 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
+      <path d="M 282 105 C 264 97, 249 98, 238 102 C 252 108, 268 109, 282 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
+
+      <circle cx="210" cy="82" r="35" fill="#120d08" stroke="url(#antiqueBrassOuter-${uid})" stroke-width="3" />
+      <circle cx="210" cy="82" r="30.5" fill="none" stroke="#75572c" stroke-width="0.9" stroke-dasharray="2 2" />
+      ${starFacets}
+      <circle cx="210" cy="82" r="6" fill="url(#brassRivet-${uid})" stroke="#1d1307" stroke-width="1.1" />
+
+      <!-- 3D EMBOSSED / TIMBUL QR CODE DIRECTLY ON THE SHIELD METAL (NO BOX / NO COVER) -->
+      <g shape-rendering="crispEdges">
+        <!-- 1. Bottom-Right Warm Bronze Specular Bevel Edge (Timbul Light Catch) -->
+        <path d="${qrPathData}" fill="#e6ca94" opacity="0.58" transform="translate(1.35, 1.35)" />
+        <!-- 2. Top-Left Deep Cast Metal Relief Shadow -->
+        <path d="${qrPathData}" fill="#040201" opacity="0.82" transform="translate(-0.95, -0.95)" />
+        <!-- 3. Main Raised Dark Espresso-Bronze QR Modules -->
+        <path d="${qrPathData}" fill="url(#embossedQrMetal-${uid})" />
+      </g>
+
+      <!-- BOTTOM SCULPTED DETECTIVE SHIELD RELIEF CREST -->
+      <path
+        d="M 134 398 Q 210 416 286 398 L 268 418 Q 210 434 152 418 Z"
+        fill="url(#antiqueBrassOuter-${uid})"
+        stroke="#1d1307"
+        stroke-width="1.5"
+      />
+      <path
+        d="M 156 426 Q 210 438 264 426"
+        fill="none"
+        stroke="#4b3518"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+      <polygon points="210,434 221,447 210,460 199,447" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
+      <polygon points="210,439 216,447 210,455 204,447" fill="#c3a46c" opacity="0.65" />
     </g>
-
-    <!-- INNER SHIELD CHISELED BORDER -->
-    <path
-      d="M 210 38 C 242 38, 263 55, 292 53 C 321 51, 344 66, 360 93 C 346 125, 355 166, 367 204 C 375 231, 364 300, 329 362 C 296 419, 245 446, 210 462 C 175 446, 124 419, 91 362 C 56 300, 45 231, 53 204 C 65 166, 74 125, 60 93 C 76 66, 99 51, 128 53 C 157 55, 178 38, 210 38 Z"
-      fill="none"
-      stroke="url(#antiqueBrassOuter-${uid})"
-      stroke-width="3"
-    />
-    <path
-      d="M 210 44 C 240 44, 260 60, 288 58 C 316 56, 338 70, 353 96 C 340 126, 348 166, 360 202 C 368 228, 357 295, 323 356 C 291 411, 243 438, 210 453 C 177 438, 129 411, 97 356 C 63 295, 52 228, 60 202 C 72 166, 80 126, 67 96 C 82 70, 104 56, 132 58 C 160 60, 180 44, 210 44 Z"
-      fill="none"
-      stroke="#1e1307"
-      stroke-width="1.3"
-      stroke-opacity="0.75"
-    />
-
-    <!-- TOP SCULPTED DETECTIVE 7-POINT STAR CREST & METAL WINGS -->
-    <path d="M 112 82 C 142 66, 166 70, 180 78 C 162 86, 138 89, 112 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-    <path d="M 124 94 C 148 83, 168 85, 181 90 C 165 98, 144 99, 124 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
-    <path d="M 138 105 C 156 97, 171 98, 182 102 C 168 108, 152 109, 138 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
-
-    <path d="M 308 82 C 278 66, 254 70, 240 78 C 258 86, 282 89, 308 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-    <path d="M 296 94 C 272 83, 252 85, 239 90 C 255 98, 276 99, 296 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
-    <path d="M 282 105 C 264 97, 249 98, 238 102 C 252 108, 268 109, 282 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
-
-    <circle cx="210" cy="82" r="35" fill="#120d08" stroke="url(#antiqueBrassOuter-${uid})" stroke-width="3" />
-    <circle cx="210" cy="82" r="30.5" fill="none" stroke="#75572c" stroke-width="0.9" stroke-dasharray="2 2" />
-    ${starFacets}
-    <circle cx="210" cy="82" r="6" fill="url(#brassRivet-${uid})" stroke="#1d1307" stroke-width="1.1" />
-
-    <!-- 3D EMBOSSED / TIMBUL QR CODE DIRECTLY ON THE SHIELD METAL (NO BOX / NO COVER) -->
-    <g shape-rendering="crispEdges">
-      <!-- 1. Bottom-Right Warm Bronze Specular Bevel Edge (Timbul Light Catch) -->
-      <path d="${qrPathData}" fill="#e6ca94" opacity="0.58" transform="translate(1.35, 1.35)" />
-      <!-- 2. Top-Left Deep Cast Metal Relief Shadow -->
-      <path d="${qrPathData}" fill="#040201" opacity="0.82" transform="translate(-0.95, -0.95)" />
-      <!-- 3. Main Raised Dark Espresso-Bronze QR Modules -->
-      <path d="${qrPathData}" fill="url(#embossedQrMetal-${uid})" />
-    </g>
-
-    <!-- BOTTOM SCULPTED DETECTIVE SHIELD RELIEF CREST -->
-    <path
-      d="M 134 398 Q 210 416 286 398 L 268 418 Q 210 434 152 418 Z"
-      fill="url(#antiqueBrassOuter-${uid})"
-      stroke="#1d1307"
-      stroke-width="1.5"
-    />
-    <path
-      d="M 156 426 Q 210 438 264 426"
-      fill="none"
-      stroke="#4b3518"
-      stroke-width="1.8"
-      stroke-linecap="round"
-    />
-    <polygon points="210,434 221,447 210,460 199,447" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-    <polygon points="210,439 216,447 210,455 204,447" fill="#c3a46c" opacity="0.65" />
   </svg>`;
 }
 
@@ -338,19 +339,22 @@ export function generateQrDataUrl(
 }
 
 /**
- * Renders the Detective QR Badge SVG to a high-resolution PNG Blob in the browser.
+ * Renders the Detective QR Badge SVG to a 100% Die-Cut Transparent PNG Blob in the browser.
+ * Enforces an exact Path2D shield contour clip on the RGBA canvas so every pixel outside
+ * the shield badge is guaranteed to have alpha = 0 (no white background).
  */
 export async function generateQrBadgePngBlob(
   text: string,
   scale = 2
 ): Promise<Blob> {
   const svgString = generateQrSvg(text);
-  const width = 420 * scale;
-  const height = 506 * scale;
+  const baseWidth = 420;
+  const baseHeight = 506;
+  const width = baseWidth * scale;
+  const height = baseHeight * scale;
 
   return new Promise<Blob>((resolve, reject) => {
-    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(svgBlob);
+    const svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
     const img = new Image();
 
     img.onload = () => {
@@ -358,20 +362,54 @@ export async function generateQrBadgePngBlob(
         const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d", { alpha: true });
         if (!ctx) {
-          URL.revokeObjectURL(url);
           reject(new Error("Canvas 2D context tidak tersedia."));
           return;
         }
+
+        // 1. Clear entire canvas to 100% transparent RGBA(0,0,0,0)
         ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        URL.revokeObjectURL(url);
+
+        // 2. Hard-clip canvas drawing to the exact Police Detective Shield contour
+        ctx.save();
+        ctx.scale(scale, scale);
+        const shieldContour = new Path2D(OUTER_DETECTIVE_SHIELD_PATH);
+        ctx.clip(shieldContour);
+        ctx.drawImage(img, 0, 0, baseWidth, baseHeight);
+        ctx.restore();
+
+        // 3. Secondary pixel-level safety pass: strip any residual white pixels outside the shield
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const data = imgData.data;
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = width;
+        maskCanvas.height = height;
+        const maskCtx = maskCanvas.getContext("2d", { alpha: true });
+        if (maskCtx) {
+          maskCtx.clearRect(0, 0, width, height);
+          maskCtx.save();
+          maskCtx.scale(scale, scale);
+          maskCtx.fillStyle = "#000000";
+          maskCtx.fill(new Path2D(OUTER_DETECTIVE_SHIELD_PATH));
+          maskCtx.restore();
+          const maskData = maskCtx.getImageData(0, 0, width, height).data;
+          for (let i = 0; i < data.length; i += 4) {
+            const maskAlpha = maskData[i + 3] ?? 0;
+            if (maskAlpha === 0) {
+              data[i] = 0;
+              data[i + 1] = 0;
+              data[i + 2] = 0;
+              data[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        }
 
         canvas.toBlob(
           (pngBlob) => {
             if (!pngBlob) {
-              reject(new Error("Gagal mengonversi lencana QR ke PNG."));
+              reject(new Error("Gagal mengonversi lencana QR ke PNG transparan."));
               return;
             }
             resolve(pngBlob);
@@ -380,16 +418,14 @@ export async function generateQrBadgePngBlob(
           1.0
         );
       } catch (err) {
-        URL.revokeObjectURL(url);
         reject(err);
       }
     };
 
     img.onerror = () => {
-      URL.revokeObjectURL(url);
       reject(new Error("Gagal memuat gambar SVG lencana QR."));
     };
 
-    img.src = url;
+    img.src = svgDataUrl;
   });
 }
