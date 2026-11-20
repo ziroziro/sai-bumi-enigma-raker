@@ -13,6 +13,9 @@ import {
 } from "@/domain/stage-essay";
 
 interface PersistedStageEssayData {
+  isFormOpen: boolean;
+  isLeaderboardRevealed: boolean;
+  leaderboardRevealId: number;
   activeStageNumber: number;
   completedStageNumbers: number[];
   spreadsheetUrl: string;
@@ -61,6 +64,11 @@ const globalStore = globalThis as unknown as {
 if (!globalStore.__sai_bumi_stage_essay_state) {
   const disk = readDiskStageEssayData();
   globalStore.__sai_bumi_stage_essay_state = {
+    isFormOpen: typeof disk?.isFormOpen === "boolean" ? disk.isFormOpen : false,
+    isLeaderboardRevealed:
+      typeof disk?.isLeaderboardRevealed === "boolean" ? disk.isLeaderboardRevealed : false,
+    leaderboardRevealId:
+      typeof disk?.leaderboardRevealId === "number" ? disk.leaderboardRevealId : 0,
     activeStageNumber:
       typeof disk?.activeStageNumber === "number" &&
       disk.activeStageNumber >= 1 &&
@@ -105,16 +113,22 @@ export function getStageEssaySnapshot(): StageEssayStateSnapshot {
 }
 
 export function submitGroupStageEssay(input: {
-  stageNumber: number;
+  stageNumber?: number;
   groupNumber: number;
   detail: string;
 }): { submission: StageEssaySubmission; snapshot: StageEssayStateSnapshot } {
   const state = getState();
-  const { stageNumber, groupNumber, detail } = input;
-
-  if (stageNumber < 1 || stageNumber > TOTAL_STAGE_COUNT) {
-    throw new StageEssayError("INVALID_STAGE", "Nomor sesi stage tidak valid (Stage 1 - 10).", 400);
+  if (!state.isFormOpen) {
+    throw new StageEssayError(
+      "FORM_CLOSED",
+      "Form pengumpulan saat ini sedang ditutup oleh Admin. Silakan tunggu hingga Admin membuka sesi.",
+      403
+    );
   }
+
+  const stageNumber = state.activeStageNumber;
+  const { groupNumber, detail } = input;
+
   if (groupNumber < 1 || groupNumber > 4) {
     throw new StageEssayError("INVALID_GROUP", "Pilihan kelompok tidak valid.", 400);
   }
@@ -125,7 +139,7 @@ export function submitGroupStageEssay(input: {
   if (alreadySubmitted) {
     throw new StageEssayError(
       "GROUP_ALREADY_SUBMITTED",
-      `${getStageGroupName(groupNumber)} sudah mengirimkan respon essay pada Stage ${stageNumber}. Satu kelompok hanya dapat melakukan 1 kali submit per sesi stage.`,
+      `${getStageGroupName(groupNumber)} sudah mengirimkan jawaban pada sesi saat ini. Satu kelompok hanya dapat mengirim 1 kali per sesi.`,
       409
     );
   }
@@ -141,7 +155,6 @@ export function submitGroupStageEssay(input: {
 
   state.submissions.push(submission);
 
-  // Jika ke-4 kelompok sudah submit di stage ini, otomatis tandai sesi stage selesai
   const countInStage = state.submissions.filter((s) => s.stageNumber === stageNumber).length;
   if (countInStage >= 4 && !state.completedStageNumbers.includes(stageNumber)) {
     state.completedStageNumbers.push(stageNumber);
@@ -154,9 +167,26 @@ export function submitGroupStageEssay(input: {
   };
 }
 
+export function setFormOpenStatus(isOpen: boolean): StageEssayStateSnapshot {
+  const state = getState();
+  state.isFormOpen = Boolean(isOpen);
+  persist();
+  return getStageEssaySnapshot();
+}
+
+export function setLeaderboardRevealedStatus(revealed: boolean): StageEssayStateSnapshot {
+  const state = getState();
+  state.isLeaderboardRevealed = Boolean(revealed);
+  if (revealed) {
+    state.leaderboardRevealId = (state.leaderboardRevealId || 0) + 1;
+  }
+  persist();
+  return getStageEssaySnapshot();
+}
+
 export function setActiveStageNumber(stageNumber: number): StageEssayStateSnapshot {
   if (stageNumber < 1 || stageNumber > TOTAL_STAGE_COUNT) {
-    throw new StageEssayError("INVALID_STAGE", "Stage harus antara 1 sampai 10.", 400);
+    throw new StageEssayError("INVALID_STAGE", "Sesi harus antara 1 sampai 10.", 400);
   }
   const state = getState();
   state.activeStageNumber = stageNumber;
@@ -234,8 +264,11 @@ export async function syncStageScoresFromGoogleSpreadsheet(
 
   const targetUrl = state.spreadsheetUrl.trim();
   if (!targetUrl) {
-    persist();
-    return getStageEssaySnapshot();
+    throw new StageEssayError(
+      "MISSING_SPREADSHEET_URL",
+      "Silakan masukkan link Google Spreadsheet penilaian terlebih dahulu.",
+      400
+    );
   }
 
   const csvExportUrl = normalizeGoogleSpreadsheetCsvUrl(targetUrl);
@@ -264,7 +297,7 @@ export async function syncStageScoresFromGoogleSpreadsheet(
     const parsedScores = parseStageScoresSpreadsheetCsv(csvText);
     if (parsedScores.length === 0) {
       throw new Error(
-        "Spreadsheet berhasil dibuka, namun belum ditemukan baris nilai untuk Stage 1-10 dan 4 kelompok."
+        "Spreadsheet berhasil dibuka, namun belum ditemukan baris nilai untuk sesi 1-10 dan 4 kelompok."
       );
     }
 

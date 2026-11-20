@@ -5,6 +5,8 @@ import {
   importStageScoresFromCsvText,
   resetStageSubmissions,
   setActiveStageNumber,
+  setFormOpenStatus,
+  setLeaderboardRevealedStatus,
   setStageCompletedStatus,
   StageEssayError,
   syncStageScoresFromGoogleSpreadsheet,
@@ -52,12 +54,36 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "");
 
+    if (action === "set_form_open") {
+      const isOpen = Boolean(body?.isOpen);
+      const snapshot = setFormOpenStatus(isOpen);
+      return Response.json({
+        success: true,
+        message: isOpen
+          ? `Halaman Form Input berhasil DIBUKA untuk Sesi ${snapshot.activeStageNumber}.`
+          : "Halaman Form Input berhasil DIKUNCI.",
+        snapshot,
+      });
+    }
+
+    if (action === "set_leaderboard_revealed") {
+      const revealed = Boolean(body?.revealed);
+      const snapshot = setLeaderboardRevealedStatus(revealed);
+      return Response.json({
+        success: true,
+        message: revealed
+          ? "Leaderboard Top 3 resmi DI-REVEAL ke halaman peserta!"
+          : "Tampilan Leaderboard ditutup kembali.",
+        snapshot,
+      });
+    }
+
     if (action === "set_active_stage") {
       const stageNumber = Number(body?.stageNumber);
       const snapshot = setActiveStageNumber(stageNumber);
       return Response.json({
         success: true,
-        message: `Stage aktif berhasil diubah ke Stage ${stageNumber}.`,
+        message: `Sesi aktif untuk penyimpanan form disetel ke Sesi ${stageNumber}.`,
         snapshot,
       });
     }
@@ -69,8 +95,8 @@ export async function POST(request: Request) {
       return Response.json({
         success: true,
         message: completed
-          ? `Sesi Stage ${stageNumber} ditandai selesai. Leaderboard 3 Teratas aktif.`
-          : `Sesi Stage ${stageNumber} dibuka kembali.`,
+          ? `Sesi ${stageNumber} ditandai selesai.`
+          : `Sesi ${stageNumber} dibuka kembali.`,
         snapshot,
       });
     }
@@ -80,7 +106,7 @@ export async function POST(request: Request) {
       const snapshot = await syncStageScoresFromGoogleSpreadsheet(spreadsheetUrl);
       return Response.json({
         success: true,
-        message: "Data nilai dari Google Spreadsheet berhasil disinkronkan.",
+        message: "Nilai dari Google Spreadsheet berhasil di-generate & diperbarui.",
         snapshot,
       });
     }
@@ -90,7 +116,7 @@ export async function POST(request: Request) {
       const snapshot = importStageScoresFromCsvText(csvText);
       return Response.json({
         success: true,
-        message: "Data nilai CSV/Spreadsheet berhasil diimpor ke Leaderboard.",
+        message: "Data nilai CSV/Spreadsheet berhasil diimpor.",
         snapshot,
       });
     }
@@ -120,7 +146,7 @@ export async function POST(request: Request) {
       const snapshot = upsertStageScores(entries);
       return Response.json({
         success: true,
-        message: "Penilaian stage berhasil disimpan dan Leaderboard 3 Teratas diperbarui.",
+        message: "Penilaian sesi berhasil disimpan dan diakumulasikan ke Leaderboard.",
         snapshot,
       });
     }
@@ -130,7 +156,7 @@ export async function POST(request: Request) {
     if (error instanceof StageEssayError) {
       return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }
-    const message = error instanceof Error ? error.message : "Gagal memproses aksi stage.";
+    const message = error instanceof Error ? error.message : "Gagal memproses aksi.";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -146,7 +172,7 @@ export async function DELETE(request: Request) {
       const snapshot = resetStageSubmissions();
       return Response.json({
         success: true,
-        message: "Seluruh respon essay dari Stage 1-10 berhasil direset.",
+        message: "Seluruh respon dari Sesi 1-10 berhasil direset.",
         snapshot,
       });
     }
@@ -155,7 +181,7 @@ export async function DELETE(request: Request) {
       const snapshot = resetStageSubmissions(body.stageNumber);
       return Response.json({
         success: true,
-        message: `Respon essay pada Stage ${body.stageNumber} berhasil direset.`,
+        message: `Respon pada Sesi ${body.stageNumber} berhasil direset.`,
         snapshot,
       });
     }
@@ -164,14 +190,14 @@ export async function DELETE(request: Request) {
       const snapshot = deleteStageSubmission(body.id);
       return Response.json({
         success: true,
-        message: "Respon essay kelompok berhasil dihapus.",
+        message: "Respon kelompok berhasil dihapus.",
         snapshot,
       });
     }
 
     return Response.json({ error: "Parameter penghapusan tidak valid." }, { status: 400 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal menghapus data stage.";
+    const message = error instanceof Error ? error.message : "Gagal menghapus data.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

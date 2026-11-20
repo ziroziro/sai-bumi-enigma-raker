@@ -6,9 +6,9 @@ import { getStageEssaySnapshot } from "@/server/stage-essay-store";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Stage Essay & Leaderboard | Sai Bumi Enigma",
+  title: "Misi Investigasi | Sai Bumi Enigma",
   description:
-    "Form submit essay per kelompok untuk 10 sesi stage investigasi beserta Leaderboard 3 Teratas dari spreadsheet penilaian.",
+    "Form pengumpulan jawaban kelompok pada sesi Misi Investigasi The Sai Bumi Enigma.",
 };
 
 export default async function StagePage() {
@@ -17,7 +17,7 @@ export default async function StagePage() {
   return (
     <>
       <a href="#main" className="skip-link">
-        Langsung ke halaman Stage Essay &amp; Leaderboard
+        Langsung ke form Misi Investigasi
       </a>
       <SiteHeader activeNav="stage" />
       <main id="main">

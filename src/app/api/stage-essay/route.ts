@@ -19,7 +19,6 @@ export async function GET(request: Request) {
       try {
         snapshot = await syncStageScoresFromGoogleSpreadsheet();
       } catch {
-        // Keep latest cached scores if transient network error occurs
         snapshot = getStageEssaySnapshot();
       }
     }
@@ -30,7 +29,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Gagal memuat data sesi stage.";
+    const message = error instanceof Error ? error.message : "Gagal memuat data sesi.";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -42,7 +41,7 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return Response.json(
         {
-          error: parsed.error.issues[0]?.message || "Data form essay tidak lengkap.",
+          error: parsed.error.issues[0]?.message || "Data form tidak lengkap.",
           code: "INVALID_PAYLOAD",
         },
         { status: 400 }
@@ -51,9 +50,8 @@ export async function POST(request: Request) {
 
     const result = submitGroupStageEssay(parsed.data);
 
-    // Jika ke-4 kelompok sudah submit dan ada URL spreadsheet, sinkronkan nilai terbaru
     let snapshot = result.snapshot;
-    const stageInfo = snapshot.stages.find((s) => s.stageNumber === parsed.data.stageNumber);
+    const stageInfo = snapshot.stages.find((s) => s.stageNumber === result.submission.stageNumber);
     if (stageInfo?.isAllGroupsSubmitted && snapshot.spreadsheetUrl) {
       try {
         snapshot = await syncStageScoresFromGoogleSpreadsheet();
@@ -65,7 +63,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         success: true,
-        message: `Respon essay ${result.submission.groupName} untuk Stage ${result.submission.stageNumber} berhasil dikirim.`,
+        message: `Terima kasih! Jawaban dari ${result.submission.groupName} sudah berhasil disimpan.`,
         submission: result.submission,
         snapshot,
       },
@@ -75,7 +73,7 @@ export async function POST(request: Request) {
     if (error instanceof StageEssayError) {
       return Response.json({ error: error.message, code: error.code }, { status: error.status });
     }
-    const message = error instanceof Error ? error.message : "Gagal menyimpan respon essay.";
+    const message = error instanceof Error ? error.message : "Gagal menyimpan jawaban.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

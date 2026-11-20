@@ -86,6 +86,15 @@ export interface StageTop3LeaderboardItem {
   submittedAt?: string;
 }
 
+export interface CumulativeLeaderboardItem {
+  rank: 1 | 2 | 3 | 4;
+  groupNumber: number;
+  groupName: string;
+  totalScore: number;
+  stageScores: Record<number, number>;
+  scoredStagesCount: number;
+}
+
 export interface StageSessionSummary {
   stageNumber: number;
   title: string;
@@ -112,6 +121,9 @@ export interface StageSessionSummary {
 }
 
 export interface StageEssayStateSnapshot {
+  isFormOpen: boolean;
+  isLeaderboardRevealed: boolean;
+  leaderboardRevealId: number;
   activeStageNumber: number;
   completedStageNumbers: number[];
   spreadsheetUrl: string;
@@ -120,21 +132,20 @@ export interface StageEssayStateSnapshot {
   submissions: StageEssaySubmission[];
   scores: StageScoreEntry[];
   stages: StageSessionSummary[];
+  cumulativeStandings: CumulativeLeaderboardItem[];
+  cumulativeTop3: CumulativeLeaderboardItem[];
 }
 
 export const submitStageEssaySchema = z.object({
-  stageNumber: z.number().int().min(1).max(TOTAL_STAGE_COUNT),
+  stageNumber: z.number().int().min(1).max(TOTAL_STAGE_COUNT).optional(),
   groupNumber: z.number().int().min(1).max(4),
   detail: z
     .string()
     .trim()
-    .min(3, "Detail jawaban essay tidak boleh kosong (minimal 3 karakter).")
+    .min(3, "Detail jawaban tidak boleh kosong (minimal 3 karakter).")
     .max(15000, "Detail jawaban terlalu panjang."),
 });
 
-/**
- * Converts a standard Google Sheets share/edit URL into a direct CSV export URL.
- */
 export function normalizeGoogleSpreadsheetCsvUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return "";
@@ -156,7 +167,6 @@ function parseCsvRows(csvText: string): string[][] {
   const lines = normalized.split("\n").filter((line) => line.trim().length > 0);
   if (lines.length === 0) return [];
 
-  // Auto-detect delimiter (comma, semicolon, or tab) from header line
   const firstLine = lines[0] ?? "";
   const delimiter =
     firstLine.includes("\t") && !firstLine.includes(",")
@@ -202,12 +212,6 @@ function parseNumberScore(raw: string | undefined): number | null {
   return Number.isFinite(num) ? Math.round(num * 100) / 100 : null;
 }
 
-/**
- * Parses stage scores from a Google Spreadsheet CSV in any of 3 layouts:
- * 1. Matrix (Rows = Stage 1..10, Columns = Team Lupin, Team Detective Jubun, Team Conan, Team Holmes)
- * 2. Long table (Columns = Stage, Nama Kelompok, Nilai, Catatan)
- * 3. Transposed Matrix (Rows = Kelompok, Columns = Stage 1..10)
- */
 export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry[] {
   const rows = parseCsvRows(csvText);
   if (rows.length < 2) return [];
@@ -216,7 +220,6 @@ export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry
   const nowIso = new Date().toISOString();
   const entryMap = new Map<string, StageScoreEntry>();
 
-  // Check Layout 1: Header columns contain group names (Matrix: Stage rows x Group columns)
   const groupCols: Array<{ colIndex: number; groupNumber: number }> = [];
   header.forEach((colName, idx) => {
     if (idx === 0) return;
@@ -248,7 +251,6 @@ export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry
     return Array.from(entryMap.values());
   }
 
-  // Check Layout 3: Header columns contain Stage 1..10 (Transposed Matrix: Group rows x Stage columns)
   const stageCols: Array<{ colIndex: number; stageNumber: number }> = [];
   header.forEach((colName, idx) => {
     if (idx === 0) return;
@@ -280,7 +282,6 @@ export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry
     return Array.from(entryMap.values());
   }
 
-  // Check Layout 2: Long table (Stage | Kelompok | Nilai | Catatan)
   let stageColIdx = header.findIndex((h) => /stage|sesi|babak|pos/i.test(h));
   let groupColIdx = header.findIndex((h) => /kelompok|team|tim|group|nama/i.test(h));
   let scoreColIdx = header.findIndex((h) => /nilai|score|poin|skor|point/i.test(h));
@@ -332,6 +333,9 @@ export function generateStageSpreadsheetTemplateCsv(existingScores: StageScoreEn
 }
 
 export function buildStageEssaySnapshot(input: {
+  isFormOpen?: boolean;
+  isLeaderboardRevealed?: boolean;
+  leaderboardRevealId?: number;
   activeStageNumber?: number;
   completedStageNumbers?: number[];
   spreadsheetUrl?: string;
@@ -387,7 +391,6 @@ export function buildStageEssaySnapshot(input: {
       .filter((g): g is typeof g & { score: number } => typeof g.score === "number")
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        // Tie-breaker: earlier submission time
         if (a.submittedAt && b.submittedAt) {
           return new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime();
         }
@@ -429,7 +432,44 @@ export function buildStageEssaySnapshot(input: {
     });
   }
 
+  // Cumulative scores: each stage score adds to the group's total score across stages
+  const rawStandings = STAGE_OFFICIAL_GROUPS.map((grp) => {
+    const stageScores: Record<number, number> = {};
+    let totalScore = 0;
+    let scoredStagesCount = 0;
+
+    for (const sc of input.scores) {
+      if (sc.groupNumber === grp.number && Number.isFinite(sc.score)) {
+        stageScores[sc.stageNumber] = sc.score;
+        totalScore += sc.score;
+        scoredStagesCount += 1;
+      }
+    }
+
+    return {
+      groupNumber: grp.number,
+      groupName: grp.name,
+      totalScore: Math.round(totalScore * 100) / 100,
+      stageScores,
+      scoredStagesCount,
+    };
+  }).sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    if (b.scoredStagesCount !== a.scoredStagesCount) return b.scoredStagesCount - a.scoredStagesCount;
+    return a.groupNumber - b.groupNumber;
+  });
+
+  const cumulativeStandings: CumulativeLeaderboardItem[] = rawStandings.map((item, idx) => ({
+    rank: (idx + 1) as 1 | 2 | 3 | 4,
+    ...item,
+  }));
+
+  const cumulativeTop3 = cumulativeStandings.slice(0, 3);
+
   return {
+    isFormOpen: Boolean(input.isFormOpen),
+    isLeaderboardRevealed: Boolean(input.isLeaderboardRevealed),
+    leaderboardRevealId: input.leaderboardRevealId ?? 0,
     activeStageNumber,
     completedStageNumbers: Array.from(completedSet).sort((a, b) => a - b),
     spreadsheetUrl: input.spreadsheetUrl ?? "",
@@ -438,5 +478,7 @@ export function buildStageEssaySnapshot(input: {
     submissions: [...input.submissions],
     scores: [...input.scores],
     stages,
+    cumulativeStandings,
+    cumulativeTop3,
   };
 }

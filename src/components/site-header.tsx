@@ -5,7 +5,7 @@ import { Icon } from "./icon";
 export function SiteHeader({
   activeNav,
 }: {
-  activeNav?: "quiz" | "pendaftaran" | "absensi" | "chief-detective" | "stage";
+  activeNav?: "quiz" | "pendaftaran" | "absensi" | "chief-detective" | "stage" | "leaderboard";
 }) {
   return (
     <header className="site-header">
@@ -34,7 +34,13 @@ export function SiteHeader({
           href="/stage"
           className={`nav-link ${activeNav === "stage" ? "is-active" : ""}`}
         >
-          Stage &amp; Leaderboard
+          Misi Investigasi
+        </Link>
+        <Link
+          href="/leaderboard"
+          className={`nav-link ${activeNav === "leaderboard" ? "is-active" : ""}`}
+        >
+          Leaderboard
         </Link>
         <Link
           href="/chief-detective"
