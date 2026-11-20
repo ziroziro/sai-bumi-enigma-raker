@@ -507,7 +507,7 @@ export function generateBarcodesZip(roster: AttendanceMember[]): Uint8Array {
   const files: ZipFileEntry[] = [];
 
   for (const m of roster) {
-    const qrBadgeSvg = generateQrSvg(m.nik);
+    const qrBadgeSvg = generateQrSvg(m.nik, { member: m });
 
     // Sanitize filename for safe extraction across all OS (Windows, Mac, Linux)
     const safeName = m.nama.replace(/[/\\?%*:|"<>]/g, "").trim();
@@ -530,7 +530,7 @@ export async function generateBarcodesPngZip(roster: AttendanceMember[]): Promis
   const files: ZipFileEntry[] = [];
 
   for (const m of roster) {
-    const pngBlob = await generateQrBadgePngBlob(m.nik, 2);
+    const pngBlob = await generateQrBadgePngBlob(m.nik, 2, m);
     const pngBytes = new Uint8Array(await pngBlob.arrayBuffer());
 
     const safeName = m.nama.replace(/[/\\?%*:|"<>]/g, "").trim();

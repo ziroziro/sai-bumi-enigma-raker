@@ -1,10 +1,14 @@
 /**
- * Realistic Dark Antique Bronze-Brown Police Detective Shield Badge
- * with 3D Embossed / Relief QR Code Emerging Directly from the Shield Surface
- * (100% Die-Cut Transparent PNG Export — Zero White Background Outside or Inside the Shield).
+ * The Sai Bumi Enigma — Thematic Detective Crest & Case-File QR Badge Generator
+ * Displays ONLY:
+ * 1. Nama Acara ("THE SAI BUMI ENIGMA")
+ * 2. 3D Embossed QR Code integrated seamlessly on the parchment-bronze shield core
+ * 3. Nama Pemilik & Nama Kelompok
+ * (100% Die-Cut Transparent PNG Export — zero white background outside the shield contour).
  */
 
 import * as zxingNamespace from "html5-qrcode/third_party/zxing-js.umd.js";
+import { findMemberByBarcode, type AttendanceMember } from "./attendance";
 
 interface ZXingModule {
   QRCodeWriter: new () => {
@@ -42,7 +46,10 @@ const zxing = ((raw.QRCodeWriter ? raw : (raw.default as Record<string, unknown>
 const { QRCodeWriter, BarcodeFormat, EncodeHintType, QRCodeDecoderErrorCorrectionLevel } = zxing;
 
 export const OUTER_DETECTIVE_SHIELD_PATH =
-  "M 210 14 C 246 14, 270 34, 302 32 C 336 30, 362 48, 382 80 C 366 116, 376 160, 390 202 C 400 234, 388 310, 348 378 C 310 441, 253 470, 210 488 C 167 470, 110 441, 72 378 C 32 310, 20 234, 30 202 C 44 160, 54 116, 38 80 C 58 48, 84 30, 118 32 C 150 34, 174 14, 210 14 Z";
+  "M 210 10 C 248 10, 272 30, 308 28 C 344 26, 372 44, 392 78 C 378 116, 388 164, 400 212 C 408 248, 398 338, 360 412 C 322 478, 258 510, 210 530 C 162 510, 98 478, 60 412 C 22 338, 12 248, 20 212 C 32 164, 42 116, 28 78 C 48 44, 76 26, 112 28 C 148 30, 172 10, 210 10 Z";
+
+const INNER_SHIELD_PATH =
+  "M 210 30 C 244 30, 266 47, 298 45 C 329 43, 353 59, 370 88 C 357 123, 366 168, 378 212 C 386 244, 376 327, 341 395 C 306 456, 250 486, 210 504 C 170 486, 114 456, 79 395 C 44 327, 34 244, 42 212 C 54 168, 63 123, 50 88 C 67 59, 91 43, 122 45 C 154 47, 176 30, 210 30 Z";
 
 function escapeXml(value: string): string {
   return value
@@ -53,10 +60,26 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
+function formatTeamDisplay(member: AttendanceMember | null): string {
+  if (!member) return "THE SAI BUMI ENIGMA";
+  switch (member.groupNumber) {
+    case 1:
+      return "KELOMPOK 1 · TEAM LUPIN";
+    case 2:
+      return "KELOMPOK 2 · TEAM DETECTIVE JUBUN";
+    case 3:
+      return "KELOMPOK 3 · TEAM CONAN";
+    case 4:
+      return "KELOMPOK 4 · TEAM HOLMES";
+    default:
+      return `KELOMPOK ${member.groupNumber} · ${member.namaKelompok.toUpperCase()}`;
+  }
+}
+
 function buildSunburstFlutes(cx: number, cy: number, radius: number, count: number): string {
   const paths: string[] = [];
   const angleStep = (Math.PI * 2) / count;
-  const halfWidth = angleStep * 0.25;
+  const halfWidth = angleStep * 0.24;
 
   for (let i = 0; i < count; i++) {
     const a1 = i * angleStep - halfWidth;
@@ -70,28 +93,21 @@ function buildSunburstFlutes(cx: number, cy: number, radius: number, count: numb
   return paths.join(" ");
 }
 
-function buildSevenPointStarFaceted(cx: number, cy: number, outerR: number, innerR: number): string {
-  const facets: string[] = [];
-  const total = 14;
-  const pts: Array<[number, number]> = [];
-
-  for (let i = 0; i < total; i++) {
-    const r = i % 2 === 0 ? outerR : innerR;
-    const angle = (i * Math.PI) / 7 - Math.PI / 2;
-    pts.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
-  }
-
-  for (let i = 0; i < total; i++) {
-    const p1 = pts[i]!;
-    const p2 = pts[(i + 1) % total]!;
-    const fill = i % 2 === 0 ? "#b8965c" : "#4b3315";
-    facets.push(
-      `<polygon points="${cx},${cy} ${p1[0].toFixed(1)},${p1[1].toFixed(1)} ${p2[0].toFixed(
-        1
-      )},${p2[1].toFixed(1)}" fill="${fill}" stroke="#1f1407" stroke-width="0.45" />`
+function buildCompassRoseTicks(cx: number, cy: number, rOuter: number, rInner: number): string {
+  const lines: string[] = [];
+  for (let deg = 0; deg < 360; deg += 15) {
+    const rad = (deg * Math.PI) / 180;
+    const r2 = deg % 45 === 0 ? rInner - 5 : rInner;
+    const sw = deg % 45 === 0 ? 1.6 : 0.8;
+    const x1 = (cx + Math.cos(rad) * rOuter).toFixed(1);
+    const y1 = (cy + Math.sin(rad) * rOuter).toFixed(1);
+    const x2 = (cx + Math.cos(rad) * r2).toFixed(1);
+    const y2 = (cy + Math.sin(rad) * r2).toFixed(1);
+    lines.push(
+      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#5b3e19" stroke-width="${sw}" stroke-opacity="0.55" />`
     );
   }
-  return facets.join("");
+  return lines.join("");
 }
 
 /**
@@ -125,14 +141,18 @@ export function generateQrSvg(
     color?: string;
     bgColor?: string;
     quietZone?: number;
-    member?: unknown;
+    member?: AttendanceMember;
   } = {}
 ): string {
+  const matchedMember = options.member ?? findMemberByBarcode(text);
+  const ownerName = (matchedMember?.nama ?? text).toUpperCase();
+  const teamLabel = formatTeamDisplay(matchedMember ?? null);
+
   const matrix = generateQrMatrix(text, options.quietZone ?? 0);
   const modulesCount = matrix.length;
-  const qrSpan = 166;
+  const qrSpan = 160;
   const qrOriginX = 210 - qrSpan / 2;
-  const qrOriginY = 178;
+  const qrOriginY = 152;
   const cellSize = qrSpan / Math.max(modulesCount, 1);
 
   const pathCommands: string[] = [];
@@ -150,189 +170,303 @@ export function generateQrSvg(
   }
 
   const qrPathData = pathCommands.join("");
-  const uid = `det-${text.replace(/[^a-zA-Z0-9]/g, "") || "shield"}`;
-  const sunburstPath = buildSunburstFlutes(210, 260, 240, 40);
-  const starFacets = buildSevenPointStarFaceted(210, 82, 31, 14.5);
+  const uid = `enigma-${text.replace(/[^a-zA-Z0-9]/g, "") || "qr"}`;
+  const sunburstPath = buildSunburstFlutes(210, 232, 235, 36);
+  const compassTicks = buildCompassRoseTicks(210, 232, 132, 125);
 
   const rivets: Array<[number, number]> = [
-    [210, 28],
-    [306, 46],
-    [364, 90],
-    [372, 206],
-    [354, 304],
-    [322, 378],
-    [210, 474],
-    [98, 378],
-    [66, 304],
-    [48, 206],
-    [56, 90],
-    [114, 46],
+    [210, 21],
+    [308, 38],
+    [372, 82],
+    [386, 212],
+    [364, 336],
+    [332, 412],
+    [210, 514],
+    [88, 412],
+    [56, 336],
+    [34, 212],
+    [48, 82],
+    [112, 38],
   ];
 
   const rivetMarkup = rivets
     .map(
       ([rx, ry]) =>
         `<g>
-          <circle cx="${rx}" cy="${ry + 1.3}" r="4.8" fill="#080503" opacity="0.78" />
-          <circle cx="${rx}" cy="${ry}" r="4.3" fill="url(#brassRivet-${uid})" stroke="#1f1407" stroke-width="0.9" />
+          <circle cx="${rx}" cy="${ry + 1.3}" r="4.6" fill="#080503" opacity="0.78" />
+          <circle cx="${rx}" cy="${ry}" r="4.1" fill="url(#brassRivet-${uid})" stroke="#1f1306" stroke-width="0.9" />
         </g>`
     )
     .join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 506" width="420" height="506" data-barcode="${escapeXml(
+  const nameFontSize =
+    ownerName.length > 26
+      ? 12.4
+      : ownerName.length > 22
+      ? 13.8
+      : ownerName.length > 17
+      ? 15.4
+      : 17.5;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 540" width="420" height="540" data-barcode="${escapeXml(
     text
   )}" shape-rendering="geometricPrecision" style="background:none;background-color:transparent;">
-    <desc>${escapeXml(text)}</desc>
+    <desc>${escapeXml(text)} - ${escapeXml(ownerName)} (${escapeXml(teamLabel)})</desc>
     <defs>
-      <!-- Darker Antique Brown-Bronze Cast Outer Rim -->
-      <linearGradient id="antiqueBrassOuter-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#211609" />
-        <stop offset="14%" stop-color="#75572c" />
-        <stop offset="28%" stop-color="#3f2c13" />
-        <stop offset="46%" stop-color="#a8844c" />
-        <stop offset="54%" stop-color="#bd995e" />
-        <stop offset="68%" stop-color="#583e1b" />
-        <stop offset="84%" stop-color="#876636" />
-        <stop offset="100%" stop-color="#170f05" />
+      <!-- Outer Cast Antique Bronze & 24K Gold Frame -->
+      <linearGradient id="antiqueGoldOuter-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#261808" />
+        <stop offset="15%" stop-color="#8b6731" />
+        <stop offset="30%" stop-color="#472f12" />
+        <stop offset="48%" stop-color="#d7b16a" />
+        <stop offset="55%" stop-color="#f5d996" />
+        <stop offset="70%" stop-color="#6e4c1e" />
+        <stop offset="86%" stop-color="#a88246" />
+        <stop offset="100%" stop-color="#1a1005" />
       </linearGradient>
 
-      <!-- Darker Bronze Bevel Counter-Sheen -->
-      <linearGradient id="brassBevel-${uid}" x1="100%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#191005" />
-        <stop offset="22%" stop-color="#967440" />
-        <stop offset="48%" stop-color="#3a2710" />
-        <stop offset="75%" stop-color="#aa8751" />
-        <stop offset="100%" stop-color="#201507" />
+      <!-- Glowing Gold Trim for Banners & Plaques -->
+      <linearGradient id="goldTrim-${uid}" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#7c5620" />
+        <stop offset="22%" stop-color="#e5c174" />
+        <stop offset="50%" stop-color="#fff0c2" />
+        <stop offset="78%" stop-color="#e5c174" />
+        <stop offset="100%" stop-color="#7c5620" />
       </linearGradient>
 
-      <!-- Unified Darker Antique Bronze-Brown Shield Face (Seamless, No Square Box) -->
-      <radialGradient id="unifiedShieldMetal-${uid}" cx="50%" cy="51%" r="58%">
-        <stop offset="0%" stop-color="#bfa06a" />
-        <stop offset="46%" stop-color="#a6854e" />
-        <stop offset="76%" stop-color="#795c2e" />
-        <stop offset="100%" stop-color="#2f1f0c" />
+      <!-- Sai Bumi Enigma Crimson-Maroon Banner Gradient -->
+      <linearGradient id="crimsonBanner-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#6b0f12" />
+        <stop offset="50%" stop-color="#480709" />
+        <stop offset="100%" stop-color="#280304" />
+      </linearGradient>
+
+      <!-- Dark Noir Detective Case Background -->
+      <radialGradient id="noirBackdrop-${uid}" cx="50%" cy="44%" r="60%">
+        <stop offset="0%" stop-color="#291c12" />
+        <stop offset="62%" stop-color="#150e0a" />
+        <stop offset="100%" stop-color="#090605" />
       </radialGradient>
 
-      <!-- 3D Embossed Deep Dark Espresso-Gunmetal Relief for QR Modules -->
-      <linearGradient id="embossedQrMetal-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#191109" />
-        <stop offset="50%" stop-color="#0d0905" />
-        <stop offset="100%" stop-color="#050302" />
+      <!-- Warm Vintage Case-File Parchment & Brushed Bronze Core (Seamless QR Zone, No White) -->
+      <radialGradient id="parchmentBronzeCore-${uid}" cx="50%" cy="43%" r="44%">
+        <stop offset="0%" stop-color="#dfc38d" />
+        <stop offset="58%" stop-color="#caa96e" />
+        <stop offset="82%" stop-color="#9e7a42" />
+        <stop offset="100%" stop-color="#22170d" />
+      </radialGradient>
+
+      <!-- 3D Embossed Deep Espresso-Crimson Relief for QR Modules -->
+      <linearGradient id="embossedQrInk-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1c0f08" />
+        <stop offset="50%" stop-color="#0f0804" />
+        <stop offset="100%" stop-color="#060302" />
       </linearGradient>
 
-      <!-- Subtle Brushed Metal Micro-Grain Pattern -->
+      <!-- Subtle Brushed Metal & Parchment Grain -->
       <pattern id="brushedGrain-${uid}" width="40" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)">
-        <line x1="0" y1="1" x2="40" y2="1" stroke="#181006" stroke-width="0.45" stroke-opacity="0.11" />
-        <line x1="0" y1="3" x2="40" y2="3" stroke="#e8cfa0" stroke-width="0.45" stroke-opacity="0.11" />
+        <line x1="0" y1="1" x2="40" y2="1" stroke="#181006" stroke-width="0.45" stroke-opacity="0.1" />
+        <line x1="0" y1="3" x2="40" y2="3" stroke="#f4dfb4" stroke-width="0.45" stroke-opacity="0.11" />
       </pattern>
 
-      <!-- 3D Rivet Specular Gradient -->
       <radialGradient id="brassRivet-${uid}" cx="35%" cy="30%" r="68%">
-        <stop offset="0%" stop-color="#d2b77e" />
-        <stop offset="50%" stop-color="#836334" />
-        <stop offset="100%" stop-color="#211608" />
+        <stop offset="0%" stop-color="#eed59d" />
+        <stop offset="52%" stop-color="#947039" />
+        <stop offset="100%" stop-color="#241707" />
       </radialGradient>
 
-      <!-- Die-Cut Outer Shield Clip (Nothing Exists Outside the Shield Shape) -->
+      <!-- Die-Cut Outer Shield Clip (Zero Background Outside the Shield) -->
       <clipPath id="outerShieldDieCut-${uid}">
         <path d="${OUTER_DETECTIVE_SHIELD_PATH}" />
       </clipPath>
 
       <clipPath id="innerShieldClip-${uid}">
-        <path d="M 210 38 C 242 38, 263 55, 292 53 C 321 51, 344 66, 360 93 C 346 125, 355 166, 367 204 C 375 231, 364 300, 329 362 C 296 419, 245 446, 210 462 C 175 446, 124 419, 91 362 C 56 300, 45 231, 53 204 C 65 166, 74 125, 60 93 C 76 66, 99 51, 128 53 C 157 55, 178 38, 210 38 Z" />
+        <path d="${INNER_SHIELD_PATH}" />
       </clipPath>
     </defs>
 
     <g clip-path="url(#outerShieldDieCut-${uid})">
-      <!-- OUTER CAST DARK ANTIQUE BRONZE SHIELD -->
+      <!-- 1. OUTER CAST ANTIQUE BRONZE-GOLD SHIELD -->
       <path
         d="${OUTER_DETECTIVE_SHIELD_PATH}"
-        fill="url(#antiqueBrassOuter-${uid})"
-        stroke="#140d04"
+        fill="url(#antiqueGoldOuter-${uid})"
+        stroke="#160e04"
         stroke-width="4"
       />
 
-      <!-- STEPPED BEVEL RIM -->
+      <!-- 2. STEPPED METALLIC BEVEL RIM -->
       <path
-        d="M 210 26 C 244 26, 266 44, 297 42 C 328 40, 353 57, 371 86 C 356 120, 365 163, 378 203 C 387 233, 376 305, 338 370 C 303 430, 249 458, 210 475 C 171 458, 117 430, 82 370 C 44 305, 33 233, 42 203 C 55 163, 64 120, 49 86 C 67 57, 92 40, 123 42 C 154 44, 176 26, 210 26 Z"
-        fill="url(#brassBevel-${uid})"
-        stroke="#b6945b"
-        stroke-width="1.1"
-        stroke-opacity="0.58"
+        d="M 210 21 C 246 21, 268 39, 302 37 C 335 35, 362 52, 380 83 C 367 119, 376 165, 388 212 C 396 245, 386 332, 350 403 C 314 467, 254 497, 210 516 C 166 497, 106 467, 70 403 C 34 332, 24 245, 32 212 C 44 165, 53 119, 40 83 C 58 52, 85 35, 118 37 C 152 39, 174 21, 210 21 Z"
+        fill="url(#noirBackdrop-${uid})"
+        stroke="url(#goldTrim-${uid})"
+        stroke-width="1.5"
       />
 
       <!-- PERIMETER RIVETS -->
       ${rivetMarkup}
 
-      <!-- UNIFIED CONTINUOUS DARK ANTIQUE BRONZE SHIELD BODY (NO INNER BOX) -->
+      <!-- 3. INNER SHIELD FACE: SEAMLESS VINTAGE PARCHMENT-BRONZE RADIAL CORE + SUNBURST -->
       <g clip-path="url(#innerShieldClip-${uid})">
-        <rect x="28" y="28" width="364" height="444" fill="url(#unifiedShieldMetal-${uid})" />
-        <path d="${sunburstPath}" fill="#2b1d0b" opacity="0.09" />
-        <rect x="28" y="28" width="364" height="444" fill="url(#brushedGrain-${uid})" />
+        <rect x="20" y="24" width="380" height="490" fill="url(#parchmentBronzeCore-${uid})" />
+        <path d="${sunburstPath}" fill="#241608" opacity="0.08" />
+        <rect x="20" y="24" width="380" height="490" fill="url(#brushedGrain-${uid})" />
+
+        <!-- Subtle Compass Rose & Detective Case-File Rings Around the QR Center -->
+        <circle cx="210" cy="232" r="134" fill="none" stroke="#61431b" stroke-width="1.1" stroke-opacity="0.45" />
+        <circle cx="210" cy="232" r="124" fill="none" stroke="#61431b" stroke-width="0.9" stroke-dasharray="3 4" stroke-opacity="0.45" />
+        ${compassTicks}
+
+        <!-- Bottom Lampung Mountain & Pine Tree Horizon Silhouette -->
+        <polygon points="40,504 105,452 162,488 210,446 264,486 320,450 380,504" fill="#1b1108" opacity="0.55" />
+        <polygon points="85,504 135,464 185,504" fill="#2c1a0b" opacity="0.55" />
+        <polygon points="235,504 285,462 340,504" fill="#2c1a0b" opacity="0.55" />
       </g>
 
-      <!-- INNER SHIELD CHISELED BORDER -->
+      <!-- INNER SHIELD CHISELED GOLD BORDER -->
       <path
-        d="M 210 38 C 242 38, 263 55, 292 53 C 321 51, 344 66, 360 93 C 346 125, 355 166, 367 204 C 375 231, 364 300, 329 362 C 296 419, 245 446, 210 462 C 175 446, 124 419, 91 362 C 56 300, 45 231, 53 204 C 65 166, 74 125, 60 93 C 76 66, 99 51, 128 53 C 157 55, 178 38, 210 38 Z"
+        d="${INNER_SHIELD_PATH}"
         fill="none"
-        stroke="url(#antiqueBrassOuter-${uid})"
+        stroke="url(#antiqueGoldOuter-${uid})"
         stroke-width="3"
       />
+
+      <!-- 4. TOP OFFICIAL EVENT NAME ONLY: "THE SAI BUMI ENIGMA" -->
       <path
-        d="M 210 44 C 240 44, 260 60, 288 58 C 316 56, 338 70, 353 96 C 340 126, 348 166, 360 202 C 368 228, 357 295, 323 356 C 291 411, 243 438, 210 453 C 177 438, 129 411, 97 356 C 63 295, 52 228, 60 202 C 72 166, 80 126, 67 96 C 82 70, 104 56, 132 58 C 160 60, 180 44, 210 44 Z"
+        d="M 64 84 C 84 54, 120 42, 210 42 C 300 42, 336 54, 356 84 L 346 124 L 74 124 Z"
+        fill="url(#noirBackdrop-${uid})"
+        fill-opacity="0.94"
+        stroke="url(#goldTrim-${uid})"
+        stroke-width="1.6"
+      />
+
+      <!-- Lampung Siger / Detective Crown Filigree Ornament -->
+      <path
+        d="M 184 58 Q 197 49 210 57 Q 223 49 236 58 L 228 63 Q 210 56 192 63 Z"
+        fill="url(#goldTrim-${uid})"
+      />
+      <polygon points="210,46 214,54 210,59 206,54" fill="#fff0c2" />
+      <circle cx="196" cy="54" r="1.8" fill="#e5c174" />
+      <circle cx="224" cy="54" r="1.8" fill="#e5c174" />
+
+      <text
+        x="210"
+        y="79"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="11.5"
+        font-weight="700"
+        fill="#e7c77f"
+        text-anchor="middle"
+        letter-spacing="3.5"
+      >
+        THE SAI BUMI
+      </text>
+      <text
+        x="210"
+        y="110"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="28"
+        font-weight="900"
+        fill="url(#goldTrim-${uid})"
+        text-anchor="middle"
+        letter-spacing="4.8"
+      >
+        ENIGMA
+      </text>
+
+      <!-- Left & Right Star Emblem Accents -->
+      <circle cx="96" cy="88" r="11" fill="#3a080a" stroke="url(#goldTrim-${uid})" stroke-width="1.2" />
+      <polygon points="96,80 99,86 105,86 100,90 102,96 96,92 90,96 92,90 87,86 93,86" fill="url(#goldTrim-${uid})" />
+      <circle cx="324" cy="88" r="11" fill="#3a080a" stroke="url(#goldTrim-${uid})" stroke-width="1.2" />
+      <polygon points="324,80 327,86 333,86 328,90 330,96 324,92 318,96 320,90 315,86 321,86" fill="url(#goldTrim-${uid})" />
+
+      <!-- 5. 3D EMBOSSED / TIMBUL QR CODE DIRECTLY ON THE PARCHMENT-BRONZE SHIELD CORE -->
+      <g shape-rendering="crispEdges">
+        <!-- Bottom-Right Warm Champagne Gold Bevel Light Catch -->
+        <path d="${qrPathData}" fill="#f7e2b2" opacity="0.68" transform="translate(1.3, 1.3)" />
+        <!-- Top-Left Cast Relief Shadow -->
+        <path d="${qrPathData}" fill="#050301" opacity="0.82" transform="translate(-0.9, -0.9)" />
+        <!-- Main Embossed Deep Espresso-Crimson QR Modules -->
+        <path d="${qrPathData}" fill="url(#embossedQrInk-${uid})" />
+      </g>
+
+      <!-- 6. OWNER IDENTITY PLAQUE: HANYA NAMA PEMILIK & NAMA KELOMPOK -->
+      <polygon
+        points="54,348 68,336 352,336 366,348 366,422 352,434 68,434 54,422"
+        fill="url(#noirBackdrop-${uid})"
+        stroke="url(#goldTrim-${uid})"
+        stroke-width="2.2"
+      />
+      <polygon
+        points="60,351 71,341 349,341 360,351 360,419 349,429 71,429 60,419"
         fill="none"
-        stroke="#1e1307"
-        stroke-width="1.3"
+        stroke="#8d6830"
+        stroke-width="0.9"
         stroke-opacity="0.75"
       />
 
-      <!-- TOP SCULPTED DETECTIVE 7-POINT STAR CREST & METAL WINGS -->
-      <path d="M 112 82 C 142 66, 166 70, 180 78 C 162 86, 138 89, 112 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-      <path d="M 124 94 C 148 83, 168 85, 181 90 C 165 98, 144 99, 124 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
-      <path d="M 138 105 C 156 97, 171 98, 182 102 C 168 108, 152 109, 138 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
+      <!-- OWNER FULL NAME -->
+      <text
+        x="210"
+        y="370"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-size="${nameFontSize}"
+        font-weight="900"
+        fill="#fff1c7"
+        text-anchor="middle"
+        letter-spacing="1.2"
+      >
+        ${escapeXml(ownerName)}
+      </text>
 
-      <path d="M 308 82 C 278 66, 254 70, 240 78 C 258 86, 282 89, 308 82 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-      <path d="M 296 94 C 272 83, 252 85, 239 90 C 255 98, 276 99, 296 94 Z" fill="url(#brassBevel-${uid})" stroke="#1d1307" stroke-width="1" />
-      <path d="M 282 105 C 264 97, 249 98, 238 102 C 252 108, 268 109, 282 105 Z" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="0.9" />
+      <!-- Divider Line -->
+      <line x1="92" y1="382" x2="328" y2="382" stroke="url(#goldTrim-${uid})" stroke-width="1" opacity="0.65" />
 
-      <circle cx="210" cy="82" r="35" fill="#120d08" stroke="url(#antiqueBrassOuter-${uid})" stroke-width="3" />
-      <circle cx="210" cy="82" r="30.5" fill="none" stroke="#75572c" stroke-width="0.9" stroke-dasharray="2 2" />
-      ${starFacets}
-      <circle cx="210" cy="82" r="6" fill="url(#brassRivet-${uid})" stroke="#1d1307" stroke-width="1.1" />
-
-      <!-- 3D EMBOSSED / TIMBUL QR CODE DIRECTLY ON THE SHIELD METAL (NO BOX / NO COVER) -->
-      <g shape-rendering="crispEdges">
-        <!-- 1. Bottom-Right Warm Bronze Specular Bevel Edge (Timbul Light Catch) -->
-        <path d="${qrPathData}" fill="#e6ca94" opacity="0.58" transform="translate(1.35, 1.35)" />
-        <!-- 2. Top-Left Deep Cast Metal Relief Shadow -->
-        <path d="${qrPathData}" fill="#040201" opacity="0.82" transform="translate(-0.95, -0.95)" />
-        <!-- 3. Main Raised Dark Espresso-Bronze QR Modules -->
-        <path d="${qrPathData}" fill="url(#embossedQrMetal-${uid})" />
-      </g>
-
-      <!-- BOTTOM SCULPTED DETECTIVE SHIELD RELIEF CREST -->
-      <path
-        d="M 134 398 Q 210 416 286 398 L 268 418 Q 210 434 152 418 Z"
-        fill="url(#antiqueBrassOuter-${uid})"
-        stroke="#1d1307"
+      <!-- OWNER GROUP / TEAM HEXAGONAL CRIMSON-GOLD BADGE -->
+      <polygon
+        points="76,406 88,392 332,392 344,406 332,420 88,420"
+        fill="url(#crimsonBanner-${uid})"
+        stroke="url(#goldTrim-${uid})"
         stroke-width="1.5"
       />
+      <text
+        x="210"
+        y="410"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="11.2"
+        font-weight="900"
+        fill="#ffd97d"
+        text-anchor="middle"
+        letter-spacing="1.8"
+      >
+        ${escapeXml(teamLabel)}
+      </text>
+
+      <!-- Bottom Sculpted Shield Tip Crest & Diamond (No Motto Text) -->
       <path
-        d="M 156 426 Q 210 438 264 426"
-        fill="none"
-        stroke="#4b3518"
-        stroke-width="1.8"
-        stroke-linecap="round"
+        d="M 136 452 Q 210 468 284 452 L 266 468 Q 210 482 154 468 Z"
+        fill="url(#antiqueGoldOuter-${uid})"
+        stroke="#1d1206"
+        stroke-width="1.3"
       />
-      <polygon points="210,434 221,447 210,460 199,447" fill="url(#antiqueBrassOuter-${uid})" stroke="#1d1307" stroke-width="1.1" />
-      <polygon points="210,439 216,447 210,455 204,447" fill="#c3a46c" opacity="0.65" />
+      <polygon
+        points="210,476 220,488 210,500 200,488"
+        fill="url(#goldTrim-${uid})"
+        stroke="#221506"
+        stroke-width="1.1"
+      />
     </g>
   </svg>`;
 }
 
 export function generateQrDataUrl(
   text: string,
-  options: { size?: number; color?: string; bgColor?: string; quietZone?: number } = {}
+  options: {
+    size?: number;
+    color?: string;
+    bgColor?: string;
+    quietZone?: number;
+    member?: AttendanceMember;
+  } = {}
 ): string {
   const svg = generateQrSvg(text, options);
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -340,16 +474,17 @@ export function generateQrDataUrl(
 
 /**
  * Renders the Detective QR Badge SVG to a 100% Die-Cut Transparent PNG Blob in the browser.
- * Enforces an exact Path2D shield contour clip on the RGBA canvas so every pixel outside
- * the shield badge is guaranteed to have alpha = 0 (no white background).
+ * Enforces an exact Path2D shield contour clip + pixel mask on the RGBA canvas so every pixel
+ * outside the shield badge is guaranteed to have alpha = 0 (no white background).
  */
 export async function generateQrBadgePngBlob(
   text: string,
-  scale = 2
+  scale = 2,
+  member?: AttendanceMember
 ): Promise<Blob> {
-  const svgString = generateQrSvg(text);
+  const svgString = generateQrSvg(text, { member });
   const baseWidth = 420;
-  const baseHeight = 506;
+  const baseHeight = 540;
   const width = baseWidth * scale;
   const height = baseHeight * scale;
 
@@ -368,10 +503,8 @@ export async function generateQrBadgePngBlob(
           return;
         }
 
-        // 1. Clear entire canvas to 100% transparent RGBA(0,0,0,0)
         ctx.clearRect(0, 0, width, height);
 
-        // 2. Hard-clip canvas drawing to the exact Police Detective Shield contour
         ctx.save();
         ctx.scale(scale, scale);
         const shieldContour = new Path2D(OUTER_DETECTIVE_SHIELD_PATH);
@@ -379,7 +512,6 @@ export async function generateQrBadgePngBlob(
         ctx.drawImage(img, 0, 0, baseWidth, baseHeight);
         ctx.restore();
 
-        // 3. Secondary pixel-level safety pass: strip any residual white pixels outside the shield
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
         const maskCanvas = document.createElement("canvas");

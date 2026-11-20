@@ -1,31 +1,18 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
-import { DeptHeadApp, type PublicSilhouetteCard } from "@/components/dept-head-app";
+import { DeptHeadApp } from "@/components/dept-head-app";
 import { getDeptHeadSnapshot } from "@/server/dept-head-service";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Chief Detective | Sai Bumi Enigma",
+  title: "Chief Detective Resmi Terungkap | Sai Bumi Enigma",
   description:
-    "Profil 7 siluet kartu karakter misterius Chief Detective di The Sai Bumi Enigma.",
+    "Jajaran 7 Chief Detective The Sai Bumi Enigma — Project Development Day 2027.",
 };
 
 export default async function ChiefDetectivePage() {
   const fullSnapshot = await getDeptHeadSnapshot();
-
-  // Hanya kirim data siluet (tanpa realName dan tanpa revealImageUrl) untuk tampilan read-only
-  const silhouetteCards: PublicSilhouetteCard[] = fullSnapshot.cards.map((card) => ({
-    id: card.id,
-    code: card.code,
-    title: card.title,
-    roleHint: card.roleHint,
-    description: card.description,
-    power: card.power,
-    defense: card.defense,
-    silhouetteVariant: card.silhouetteVariant,
-    customImageUrl: card.customImageUrl,
-  }));
 
   return (
     <>
@@ -34,12 +21,11 @@ export default async function ChiefDetectivePage() {
       </a>
       <SiteHeader activeNav="chief-detective" />
       <main id="main">
-        <DeptHeadApp cards={silhouetteCards} />
+        <DeptHeadApp
+          cards={fullSnapshot.cards}
+          takenCardIds={fullSnapshot.takenCardIds}
+        />
       </main>
-      <footer className="site-footer">
-        <div className="tapis-line" aria-hidden="true" />
-        <p>The Sai Bumi Enigma · Lampung · 2026</p>
-      </footer>
     </>
   );
 }

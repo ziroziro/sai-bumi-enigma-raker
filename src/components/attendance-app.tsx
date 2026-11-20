@@ -846,9 +846,6 @@ export function AttendanceApp() {
                       </div>
                     </div>
                     <div className="id-card-controls-right">
-                      <span className="id-card-number">
-                        NO. {String(scannedMember.no).padStart(2, "0")} / 35
-                      </span>
                       <button
                         type="button"
                         className="btn-sim-reset-card"

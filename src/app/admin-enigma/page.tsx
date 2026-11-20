@@ -1,6 +1,8 @@
 "use client";
 
 import { AdminDeptHeadPanel, type AdminDeptHeadSnapshot } from "@/components/admin-dept-head-panel";
+import { AdminStagePanel } from "@/components/admin-stage-panel";
+import type { StageEssayStateSnapshot } from "@/domain/stage-essay";
 
 import { useEffect, useState } from "react";
 import { officialGroups } from "@/config/event";
@@ -33,10 +35,32 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // Active Admin Tab: "quiz" | "attendance" | "catalog" | "dept-head"
-  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head">("quiz");
+  // Active Admin Tab: "quiz" | "attendance" | "catalog" | "dept-head" | "stage"
+  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head" | "stage">("quiz");
   const [deptHeadSnapshot, setDeptHeadSnapshot] = useState<AdminDeptHeadSnapshot | null>(null);
   const [loadingDeptHead, setLoadingDeptHead] = useState(false);
+
+  const [stageSnapshot, setStageSnapshot] = useState<StageEssayStateSnapshot | null>(null);
+  const [loadingStage, setLoadingStage] = useState(false);
+
+  async function fetchStageSnapshot() {
+    setLoadingStage(true);
+    try {
+      const res = await fetch("/api/admin/stage-essay", {
+        headers: getAdminHeaders(),
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = (await res.json()) as StageEssayStateSnapshot;
+        setStageSnapshot(data);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStage(false);
+    }
+  }
 
   async function fetchDeptHead() {
     setLoadingDeptHead(true);
@@ -94,6 +118,7 @@ export default function AdminPage() {
           setIsAuthenticated(true);
           void fetchAttendance();
           void fetchDeptHead();
+          void fetchStageSnapshot();
         } else {
           setIsAuthenticated(false);
         }
@@ -391,7 +416,7 @@ export default function AdminPage() {
   // Download QR Code Detective Badge PNG (Nama file: [Nama] - [NIK].png)
   const handleDownloadQr = async (member: AttendanceMember) => {
     try {
-      const pngBlob = await generateQrBadgePngBlob(member.nik, 2);
+      const pngBlob = await generateQrBadgePngBlob(member.nik, 2, member);
       const url = URL.createObjectURL(pngBlob);
       const a = document.createElement("a");
       a.href = url;
@@ -623,6 +648,18 @@ export default function AdminPage() {
           <span>
             Pemilihan Chief Detective ({deptHeadSnapshot ? `${deptHeadSnapshot.totalGroupsSubmitted}/${deptHeadSnapshot.maxGroups}` : "0/4"})
           </span>
+        </button>
+
+        <button
+          type="button"
+          className={`admin-tab-btn ${activeAdminTab === "stage" ? "is-active" : ""}`}
+          onClick={() => {
+            setActiveAdminTab("stage");
+            void fetchStageSnapshot();
+          }}
+        >
+          <Icon name="compass" size={16} />
+          <span>Stage &amp; Spreadsheet (10)</span>
         </button>
       </nav>
 
@@ -1091,7 +1128,7 @@ export default function AdminPage() {
                       <div
                         className="catalog-barcode-svg-box"
                         dangerouslySetInnerHTML={{
-                          __html: generateQrSvg(member.nik),
+                          __html: generateQrSvg(member.nik, { member }),
                         }}
                       />
                     </div>
@@ -1121,6 +1158,16 @@ export default function AdminPage() {
           loading={loadingDeptHead}
           onRefresh={fetchDeptHead}
           onSnapshotChange={setDeptHeadSnapshot}
+          getHeaders={getAdminHeaders}
+        />
+      )}
+
+      {activeAdminTab === "stage" && (
+        <AdminStagePanel
+          snapshot={stageSnapshot}
+          loading={loadingStage}
+          onRefresh={fetchStageSnapshot}
+          onSnapshotChange={setStageSnapshot}
           getHeaders={getAdminHeaders}
         />
       )}

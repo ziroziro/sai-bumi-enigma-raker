@@ -6,22 +6,13 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const fullSnapshot = await getDeptHeadSnapshot();
-    const cards = fullSnapshot.cards.map((card) => ({
-      id: card.id,
-      code: card.code,
-      title: card.title,
-      roleHint: card.roleHint,
-      description: card.description,
-      power: card.power,
-      defense: card.defense,
-      silhouetteVariant: card.silhouetteVariant,
-      customImageUrl: card.customImageUrl,
-    }));
 
     return Response.json(
       {
         readonly: true,
-        cards,
+        revealed: true,
+        cards: fullSnapshot.cards,
+        takenCardIds: fullSnapshot.takenCardIds,
       },
       {
         headers: {
