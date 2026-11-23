@@ -1,1 +1,7 @@
-export { dynamic, default } from "@/app/mission-2-5/page";
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
+
+export default function MissionRedirectPage() {
+  redirect("/mission");
+}
