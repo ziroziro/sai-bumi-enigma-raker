@@ -236,8 +236,9 @@ export function setQuizStatus(isOpen: boolean, channel: QuizChannelId = "pretest
     ...prev.channels,
   };
 
-  // Untuk Quiz 1 - 4: hanya boleh 1 quiz yang aktif dalam satu waktu
-  if (isOpen && channel !== "pretest") {
+  // Hanya boleh 1 Mission (Mission 1 - 5) yang aktif dalam satu waktu
+  if (isOpen) {
+    nextChannels.pretest = false;
     nextChannels["quiz-1"] = false;
     nextChannels["quiz-2"] = false;
     nextChannels["quiz-3"] = false;

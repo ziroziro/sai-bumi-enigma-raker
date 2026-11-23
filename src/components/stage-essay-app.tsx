@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icon";
 import {
   STAGE_OFFICIAL_GROUPS,
@@ -14,9 +14,11 @@ interface StageEssayAppProps {
 export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
   const [snapshot, setSnapshot] = useState<StageEssayStateSnapshot>(initialSnapshot);
   const [selectedGroupNumber, setSelectedGroupNumber] = useState<string>("");
+  const [submitterNameInput, setSubmitterNameInput] = useState<string>("");
   const [detailInput, setDetailInput] = useState<string>("");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoFileName, setPhotoFileName] = useState<string>("");
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
@@ -107,6 +109,11 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
       return;
     }
 
+    if (submitterNameInput.trim().length < 2) {
+      setErrorMsg("Silakan isi field Nama terlebih dahulu (minimal 2 karakter).");
+      return;
+    }
+
     const groupNum = Number(selectedGroupNumber);
     if (submittedGroupSet.has(groupNum)) {
       setErrorMsg(
@@ -124,6 +131,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           groupNumber: groupNum,
+          submitterName: submitterNameInput.trim(),
           detail: detailInput.trim(),
           photoDataUrl: photoDataUrl || null,
         }),
@@ -152,6 +160,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
         "Kelompok";
 
       setDetailInput("");
+      setSubmitterNameInput("");
       setSelectedGroupNumber("");
       setPhotoDataUrl(null);
       setPhotoFileName("");
@@ -308,6 +317,22 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
             </div>
 
             <div className="form-field-group">
+              <label htmlFor="stage-submitter-name" className="field-label">
+                Nama <span className="required-star">*</span>
+              </label>
+              <input
+                id="stage-submitter-name"
+                type="text"
+                className="quiz-input"
+                placeholder="Masukkan nama Anda..."
+                value={submitterNameInput}
+                onChange={(e) => setSubmitterNameInput(e.target.value)}
+                required
+                disabled={submitting}
+              />
+            </div>
+
+            <div className="form-field-group">
               <label htmlFor="stage-essay-detail" className="field-label">
                 Detail
               </label>
@@ -329,13 +354,49 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
               </label>
               <div className="stage-photo-upload-box">
                 <input
+                  ref={photoInputRef}
                   id="stage-photo-upload"
                   type="file"
                   accept="image/*"
-                  className="stage-photo-input"
+                  className="stage-photo-input-hidden"
                   onChange={handlePhotoFileChange}
                   disabled={submitting}
                 />
+
+                <button
+                  type="button"
+                  className={`btn-stage-gallery-upload ${photoDataUrl ? "has-photo" : ""}`}
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={submitting}
+                >
+                  <span className="gallery-btn-shimmer" aria-hidden="true" />
+                  <span className="gallery-btn-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="22"
+                      height="22"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.9"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="5" width="18" height="14" rx="2.5" />
+                      <circle cx="8.5" cy="10" r="1.5" />
+                      <path d="M21 15l-4.5-4.5a1.4 1.4 0 0 0-2 0L6 19" />
+                    </svg>
+                  </span>
+                  <span className="gallery-btn-copy">
+                    <strong>
+                      {photoDataUrl ? "Ganti Foto dari Galeri" : "Buka Galeri & Pilih Foto"}
+                    </strong>
+                    <small>Ketuk untuk memilih foto bukti (JPG, PNG, WEBP)</small>
+                  </span>
+                  <span className="gallery-btn-arrow" aria-hidden="true">
+                    <Icon name="arrow" size={16} />
+                  </span>
+                </button>
+
                 {photoDataUrl ? (
                   <div className="stage-photo-preview-wrap">
                     <img
@@ -352,24 +413,28 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
                         onClick={() => {
                           setPhotoDataUrl(null);
                           setPhotoFileName("");
+                          if (photoInputRef.current) {
+                            photoInputRef.current.value = "";
+                          }
                         }}
                       >
                         Hapus Foto
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <p className="stage-photo-hint">
-                    Mendukung dengan format foto (JPG, PNG, WEBP)
-                  </p>
-                )}
+                ) : null}
               </div>
             </div>
 
             <button
               type="submit"
               className="btn-primary-link btn-stage-submit"
-              disabled={submitting || !selectedGroupNumber || detailInput.trim().length < 3}
+              disabled={
+                submitting ||
+                !selectedGroupNumber ||
+                submitterNameInput.trim().length < 2 ||
+                detailInput.trim().length < 3
+              }
             >
               <span>{submitting ? "Menyimpan Jawaban..." : "Submit Jawaban"}</span>
               <Icon name="arrow" size={18} />

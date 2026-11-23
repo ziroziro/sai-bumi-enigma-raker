@@ -8451,9 +8451,11 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
 }
 
 .blind-envelope-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 260px));
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  max-width: 860px;
+  margin: 0 auto;
   gap: 88px 28px;
   padding-top: 84px;
 }
@@ -9574,6 +9576,139 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
   color: var(--color-cream);
 }
 
+.stage-photo-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.btn-stage-gallery-upload {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(215, 164, 66, 0.58);
+  background: linear-gradient(135deg, rgba(46, 33, 18, 0.92), rgba(24, 17, 12, 0.95));
+  color: var(--color-cream);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 224, 152, 0.16);
+}
+
+.btn-stage-gallery-upload:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(242, 200, 108, 0.9);
+  box-shadow: 0 10px 26px rgba(215, 164, 66, 0.22), inset 0 1px 0 rgba(255, 224, 152, 0.28);
+}
+
+.btn-stage-gallery-upload:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+.btn-stage-gallery-upload:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gallery-btn-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    rgba(245, 208, 124, 0.18) 48%,
+    transparent 76%
+  );
+  transform: translateX(-120%);
+  animation: galleryBtnShimmer 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.gallery-btn-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 30% 30%, rgba(242, 200, 108, 0.28), rgba(215, 164, 66, 0.1));
+  border: 1px solid rgba(242, 200, 108, 0.45);
+  color: #f3ca74;
+  animation: galleryIconFloat 2.4s ease-in-out infinite;
+  transition: transform 0.22s ease;
+}
+
+.btn-stage-gallery-upload:hover:not(:disabled) .gallery-btn-icon {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.gallery-btn-copy {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.gallery-btn-copy strong {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f7e4bc;
+}
+
+.gallery-btn-copy small {
+  font-size: 12px;
+  color: rgba(235, 220, 194, 0.72);
+}
+
+.gallery-btn-arrow {
+  flex-shrink: 0;
+  color: #f3ca74;
+  display: inline-flex;
+  align-items: center;
+  transition: transform 0.22s ease;
+}
+
+.btn-stage-gallery-upload:hover:not(:disabled) .gallery-btn-arrow {
+  transform: translateX(4px);
+}
+
+@keyframes galleryBtnShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  45%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+@keyframes galleryIconFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 .stage-photo-hint {
   margin: 0;
   font-size: 12px;
@@ -9631,6 +9766,62 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
   max-height: 420px;
   object-fit: contain;
   display: block;
+}
+
+/* =========================================================================
+   FOTO PROFIL PESERTA DI ABSENSI, PRETEST & QUIZ
+   ========================================================================= */
+
+.agent-avatar-circle.has-photo {
+  padding: 0;
+  overflow: visible;
+}
+
+.agent-avatar-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.quiz-selected-profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.quiz-selected-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  border: 2px solid rgba(240, 192, 90, 0.72);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  flex-shrink: 0;
+}
+
+.quiz-result-photo-wrap {
+  width: 124px;
+  height: 124px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  padding: 3px;
+  background: linear-gradient(135deg, #ffe28a, #b88424);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+.quiz-result-photo {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+  background: #140f0d;
 }
 
 

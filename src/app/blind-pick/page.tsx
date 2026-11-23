@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Blind Pick Berkas Rahasia | Sai Bumi Enigma",
   description:
-    "Halaman Blind Pick 6 berkas rahasia untuk memilih dan mengungkap kartu kekuatan The Sai Bumi Enigma.",
+    "Halaman Blind Pick 5 berkas rahasia untuk memilih dan mengungkap kartu kekuatan The Sai Bumi Enigma.",
 };
 
 export default function BlindPickPage() {

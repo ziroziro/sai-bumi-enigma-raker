@@ -3,7 +3,7 @@ import { z } from "zod";
 export const TOTAL_STAGE_COUNT = 10;
 
 export const STATIC_STAGE_SPREADSHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1wU906kwjcFFgEtcNAUijrWsfYoc_vep5xTfwqQOsACU/edit?gid=1587789440#gid=1587789440";
+  "https://docs.google.com/spreadsheets/d/1m-uU47S6h_OO0JlRnvp7Fp5yKKDNvhR2wSQn6rJBkd8/edit?gid=2100264421#gid=2100264421";
 
 export const STAGE_RUBRIC_ASPECTS = [
   {
@@ -49,6 +49,7 @@ export const STAGE_OFFICIAL_GROUPS = [
     name: "Team Detective Jubun",
     aliases: [
       "jubun",
+      "detektif jubun",
       "detective jubun",
       "detectif jubun",
       "team detective jubun",
@@ -103,6 +104,7 @@ export interface StageEssaySubmission {
   stageNumber: number; // 1..10
   groupNumber: number; // 1..4
   groupName: string;
+  submitterName?: string;
   detail: string;
   photoDataUrl?: string | null;
   submittedAt: string;
@@ -189,6 +191,11 @@ export interface StageEssayStateSnapshot {
 export const submitStageEssaySchema = z.object({
   stageNumber: z.number().int().min(1).max(TOTAL_STAGE_COUNT).optional(),
   groupNumber: z.number().int().min(1).max(4),
+  submitterName: z
+    .string()
+    .trim()
+    .min(2, "Nama tidak boleh kosong (minimal 2 karakter).")
+    .max(120, "Nama terlalu panjang."),
   detail: z
     .string()
     .trim()
@@ -217,7 +224,7 @@ export function normalizeGoogleSpreadsheetCsvUrl(rawUrl: string): string {
   const gidMatch = /[?#&]gid=([0-9]+)/.exec(trimmed);
   const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : "";
 
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gidParam}`;
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`;
 }
 
 function parseCsvRows(csvText: string): string[][] {
@@ -498,6 +505,115 @@ export function parseStageScoresSpreadsheetCsv(
   }
 
   return Array.from(entryMap.values());
+}
+
+export interface ParsedStageSpreadsheetResult {
+  scores: StageScoreEntry[];
+  bestGroupScores: Record<number, number>;
+}
+
+/**
+ * Mem-parsing Google Spreadsheet format ranking per Stage:
+ * - Blok atas: kolom "Nama Kelompok" & "Nilai Akhir" -> Best Kelompok Sementara
+ * - Blok stage (Stage 1..10): kolom "Nilai Total" -> Leaderboard per Stage
+ * Jika format blok tidak ditemukan, otomatis fallback ke parser generik.
+ */
+export function parseStageAndBestGroupSpreadsheetCsv(
+  csvText: string,
+  options?: {
+    activeStageNumber?: number;
+    rowStageMap?: Record<string, number>;
+  }
+): ParsedStageSpreadsheetResult {
+  const rows = parseCsvRows(csvText);
+  const nowIso = new Date().toISOString();
+  const bestGroupScores: Record<number, number> = {};
+  const stageEntries: StageScoreEntry[] = [];
+
+  if (rows.length >= 2) {
+    // 1. Cari header blok "Nilai Akhir" (Best Kelompok Sementara)
+    for (let r = 0; r < Math.min(rows.length, 15); r++) {
+      const row = rows[r]!;
+      const nilaiAkhirCol = row.findIndex((c) => /^nilai\s*akhir$/i.test(c.trim()));
+      const namaKelCol = row.findIndex((c) => /^nama\s*kelompok$/i.test(c.trim()));
+      if (nilaiAkhirCol >= 0 && namaKelCol >= 0) {
+        for (let k = r + 1; k < Math.min(rows.length, r + 10); k++) {
+          const dataRow = rows[k]!;
+          const rawName = (dataRow[namaKelCol] ?? "").trim();
+          const col0 = (dataRow[0] ?? "").trim();
+          if (!rawName || /^stage\b/i.test(col0) || /^nama\s*kelompok$/i.test(col0)) {
+            break;
+          }
+          const grpNum = matchStageGroupNumber(rawName);
+          const val = parseNumberScore(dataRow[nilaiAkhirCol]);
+          if (grpNum !== null && val !== null && bestGroupScores[grpNum] === undefined) {
+            bestGroupScores[grpNum] = val;
+          }
+          if (Object.keys(bestGroupScores).length >= 4) break;
+        }
+        break;
+      }
+    }
+
+    // 2. Cari header kolom "Nilai Total" untuk blok Stage 1..10
+    let nilaiTotalHeaderRow = -1;
+    let nilaiTotalCol = -1;
+    for (let r = 0; r < Math.min(rows.length, 25); r++) {
+      const row = rows[r]!;
+      const colIdx = row.findIndex((c) => /^nilai\s*total$/i.test(c.trim()));
+      if (colIdx >= 0) {
+        nilaiTotalHeaderRow = r;
+        nilaiTotalCol = colIdx;
+        break;
+      }
+    }
+
+    if (nilaiTotalHeaderRow >= 0 && nilaiTotalCol >= 0) {
+      let currentStage: number | null = null;
+      const seenKey = new Map<string, StageScoreEntry>();
+
+      for (let r = nilaiTotalHeaderRow + 1; r < rows.length; r++) {
+        const row = rows[r]!;
+        const col0 = (row[0] ?? "").trim();
+        const col1 = (row[1] ?? "").trim();
+
+        const stageMatch = /^stage\s*(10|[1-9])\b/i.exec(col0);
+        if (stageMatch && stageMatch[1]) {
+          currentStage = Number(stageMatch[1]);
+          continue;
+        }
+
+        if (currentStage !== null) {
+          const grpNum =
+            matchStageGroupNumber(col1) ?? matchStageGroupNumber(col0);
+          const scoreVal = parseNumberScore(row[nilaiTotalCol]);
+          if (grpNum !== null && scoreVal !== null) {
+            seenKey.set(`${currentStage}-${grpNum}`, {
+              stageNumber: currentStage,
+              groupNumber: grpNum,
+              groupName: getStageGroupName(grpNum),
+              score: scoreVal,
+              updatedAt: nowIso,
+            });
+          }
+        }
+      }
+
+      stageEntries.push(...seenKey.values());
+    }
+  }
+
+  if (stageEntries.length > 0 || Object.keys(bestGroupScores).length > 0) {
+    return {
+      scores: stageEntries,
+      bestGroupScores,
+    };
+  }
+
+  return {
+    scores: parseStageScoresSpreadsheetCsv(csvText, options),
+    bestGroupScores,
+  };
 }
 
 export function generateStageSpreadsheetTemplateCsv(existingScores: StageScoreEntry[] = []): string {

@@ -10,6 +10,7 @@ import {
   type AttendanceSessionType,
   type RoomMovementLog,
 } from "@/domain/attendance";
+import { getParticipantPhotoUrl } from "@/domain/participant-photos";
 import { Icon } from "./icon";
 
 const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
@@ -976,12 +977,32 @@ export function AttendanceApp() {
                   <div className="id-card-main-body-integrated">
                     {/* LEFT: AGENT AVATAR & BADGES */}
                     <div className="id-card-avatar-box">
-                      <div className="agent-avatar-circle">
-                        <Icon name="people" size={44} />
-                        <span className="avatar-rank-star">
-                          {scannedMember.statusRank.toLowerCase().includes("lead") ? "★★" : "★"}
-                        </span>
-                      </div>
+                      {(() => {
+                        const photoUrl = getParticipantPhotoUrl(
+                          scannedMember.nik,
+                          scannedMember.nama
+                        );
+                        return (
+                          <div
+                            className={`agent-avatar-circle ${photoUrl ? "has-photo" : ""}`}
+                          >
+                            {photoUrl ? (
+                              <img
+                                src={photoUrl}
+                                alt={scannedMember.nama}
+                                className="agent-avatar-photo"
+                              />
+                            ) : (
+                              <Icon name="people" size={44} />
+                            )}
+                            <span className="avatar-rank-star">
+                              {scannedMember.statusRank.toLowerCase().includes("lead")
+                                ? "★★"
+                                : "★"}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       <span className="agent-rank-pill">{scannedMember.statusRank}</span>
                       <span className="agent-gender-tag">{scannedMember.genderLabel}</span>
                       <div className="avatar-status-pill">

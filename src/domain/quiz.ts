@@ -20,11 +20,11 @@ export const QUIZ_CHANNELS: ReadonlyArray<{
   shortLabel: string;
   group: "pretest" | "quiz";
 }> = [
-  { id: "pretest", label: "Pretest Investigasi", shortLabel: "Pretest", group: "pretest" },
-  { id: "quiz-1", label: "Quiz 1 · Deduksi & Sandi", shortLabel: "Quiz 1", group: "quiz" },
-  { id: "quiz-2", label: "Quiz 2 · Analitik & Pola", shortLabel: "Quiz 2", group: "quiz" },
-  { id: "quiz-3", label: "Quiz 3 · Wawasan Enigma", shortLabel: "Quiz 3", group: "quiz" },
-  { id: "quiz-4", label: "Quiz 4 · Strategi Final", shortLabel: "Quiz 4", group: "quiz" },
+  { id: "pretest", label: "Mission 1 · Investigasi", shortLabel: "Mission 1", group: "pretest" },
+  { id: "quiz-1", label: "Mission 2 · Deduksi & Sandi", shortLabel: "Mission 2", group: "quiz" },
+  { id: "quiz-2", label: "Mission 3 · Analitik & Pola", shortLabel: "Mission 3", group: "quiz" },
+  { id: "quiz-3", label: "Mission 4 · Wawasan Enigma", shortLabel: "Mission 4", group: "quiz" },
+  { id: "quiz-4", label: "Mission 5 · Strategi Final", shortLabel: "Mission 5", group: "quiz" },
 ] as const;
 
 export const QUIZ_ONLY_CHANNEL_IDS: readonly QuizChannelId[] = [
@@ -45,7 +45,7 @@ export function isValidQuizChannelId(value: unknown): value is QuizChannelId {
 }
 
 export function getQuizChannelLabel(channelId: QuizChannelId): string {
-  return QUIZ_CHANNELS.find((c) => c.id === channelId)?.label ?? "Pretest Investigasi";
+  return QUIZ_CHANNELS.find((c) => c.id === channelId)?.label ?? "Mission 1 · Investigasi";
 }
 
 export interface QuizSubmissionRecord {

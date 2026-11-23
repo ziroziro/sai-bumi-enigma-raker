@@ -9,8 +9,8 @@ import {
   generateRandomQuiz,
   getQuizChannelLabel,
   isQuizPassed,
+  QUIZ_CHANNELS,
   QUIZ_DURATION_SECONDS,
-  QUIZ_KKM_SCORE,
   QUIZ_ONLY_CHANNEL_IDS,
   QUIZ_QUESTION_COUNT,
   type QuizChannelId,
@@ -19,6 +19,7 @@ import {
   type QuizResult,
 } from "@/domain/quiz";
 import { createRegistrationRepository } from "@/repositories";
+import { getParticipantPhotoUrl } from "@/domain/participant-photos";
 import type { Participant, RegistrationSnapshot } from "@/domain/registration";
 import { Icon } from "./icon";
 
@@ -93,18 +94,29 @@ function markParticipantCompleted(quizKey: QuizChannelId, participantId: string)
 
 export function QuizApp({
   configuration,
-  mode = "pretest",
+  mode = "all",
 }: {
   configuration: DataConfiguration;
-  mode?: "pretest" | "quiz";
+  mode?: "all" | "pretest" | "quiz";
 }) {
   const defaultQuizKey: QuizChannelId = mode === "quiz" ? "quiz-1" : "pretest";
-  const [activeQuizKey, setActiveQuizKey] = useState<QuizChannelId>(defaultQuizKey);
 
-  // Check persisted session once via lazy state initializer
-  const [initialLoad] = useState<StoredSessionLoad>(() => getStoredSessionLoad(defaultQuizKey));
+  // Check persisted session once via lazy state initializer (cek semua Mission 1-5 jika mode="all")
+  const [initialLoad] = useState<StoredSessionLoad>(() => {
+    if (mode === "all") {
+      for (const ch of QUIZ_CHANNELS) {
+        const found = getStoredSessionLoad(ch.id);
+        if (found.session) return found;
+      }
+    }
+    return getStoredSessionLoad(defaultQuizKey);
+  });
   const initialSession = initialLoad.session;
   const isInitiallyExpired = initialLoad.isExpired;
+
+  const [activeQuizKey, setActiveQuizKey] = useState<QuizChannelId>(
+    () => initialSession?.quizKey ?? defaultQuizKey
+  );
 
   // Step state: "identity" | "in_progress" | "result"
   const [stage, setStage] = useState<"identity" | "in_progress" | "result">(() => {
@@ -246,7 +258,17 @@ export function QuizApp({
             "quiz-4": Boolean(data.channels?.["quiz-4"]),
           };
 
-          if (mode === "quiz") {
+          if (mode === "all") {
+            // Otomatis ikuti 1 Mission (Mission 1 - 5) yang sedang diaktifkan oleh Admin
+            const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? null;
+            if (openMissionId) {
+              setActiveQuizKey(openMissionId);
+              setCompletedIds(getCompletedParticipantIds(openMissionId));
+              setIsQuizOpen(true);
+            } else {
+              setIsQuizOpen(false);
+            }
+          } else if (mode === "quiz") {
             // Otomatis ikuti 1 quiz (Quiz 1 - 4) yang sedang diaktifkan oleh Admin
             const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? null;
             if (openQuizId) {
@@ -608,27 +630,33 @@ export function QuizApp({
   // =========================================================================
   if (stage === "identity") {
     const detectedGroupName = selectedGroupNumber ? getGroupName(selectedGroupNumber) : null;
+    const activeMissionShortLabel =
+      QUIZ_CHANNELS.find((c) => c.id === activeQuizKey)?.shortLabel ?? "Mission";
+    const closedScopeLabel =
+      mode === "all" ? "MISSION 1–5" : mode === "quiz" ? "MISSION 2–5" : "MISSION 1";
 
     return (
       <section className="quiz-panel panel" aria-labelledby="quiz-setup-heading">
         <div className="section-kicker">
           <Icon name="compass" />
           <span>
-            {mode === "quiz" && !isQuizOpen
-              ? "QUIZ INVESTIGASI · MENUNGGU AKTIVASI ADMIN"
+            {!isQuizOpen
+              ? `${closedScopeLabel} · MENUNGGU AKTIVASI ADMIN`
               : `${getQuizChannelLabel(activeQuizKey).toUpperCase()} · THE SAI BUMI ENIGMA`}
           </span>
         </div>
         <h2 id="quiz-setup-heading" className="quiz-title">
-          {mode === "quiz"
-            ? isQuizOpen
-              ? getQuizChannelLabel(activeQuizKey)
-              : "Quiz Belum Diaktifkan Admin"
-            : "Pretest Investigasi Detektif"}
+          {isQuizOpen
+            ? getQuizChannelLabel(activeQuizKey)
+            : mode === "all"
+            ? "Mission Belum Diaktifkan Admin"
+            : mode === "quiz"
+            ? "Mission 2–5 Belum Diaktifkan Admin"
+            : "Mission 1 · Investigasi Detektif"}
         </h2>
 
         <p className="quiz-desc">
-          Tantangan investigasi <strong>15 soal · 10 menit</strong> (KKM: <strong>{QUIZ_KKM_SCORE}</strong>) untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
+          Tantangan investigasi <strong>15 soal · 10 menit</strong> untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
           Kelompok terdeteksi otomatis saat memilih nama peserta. Soal diselesaikan secara berurutan satu per satu.
         </p>
 
@@ -737,9 +765,25 @@ export function QuizApp({
             </div>
 
             {selectedParticipant && (
-              <p className="selected-participant-hint">
-                <Icon name="check" size={16} /> Peserta: <strong>{selectedParticipant.name}</strong> ({selectedParticipant.code})
-              </p>
+              <div className="quiz-selected-profile-bar">
+                {(() => {
+                  const photoUrl = getParticipantPhotoUrl(
+                    selectedParticipant.code,
+                    selectedParticipant.name
+                  );
+                  return photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt={selectedParticipant.name}
+                      className="quiz-selected-avatar"
+                    />
+                  ) : null;
+                })()}
+                <p className="selected-participant-hint" style={{ margin: 0 }}>
+                  <Icon name="check" size={16} /> Peserta:{" "}
+                  <strong>{selectedParticipant.name}</strong> ({selectedParticipant.code})
+                </p>
+              </div>
             )}
 
             {/* PERINGATAN JIKA SUDAH PERNAH SUBMIT */}
@@ -747,9 +791,9 @@ export function QuizApp({
               <div className="completed-warning-panel" role="alert">
                 <Icon name="info" size={18} />
                 <div>
-                  <strong>Peserta Telah Menyelesaikan Kuis</strong>
+                  <strong>Peserta Telah Menyelesaikan {activeMissionShortLabel}</strong>
                   <p>
-                    Nama peserta <strong>{selectedParticipant?.name}</strong> telah mengumpulkan jawaban sebelumnya dan tidak dapat mengisi kuis kembali.
+                    Nama peserta <strong>{selectedParticipant?.name}</strong> telah mengumpulkan jawaban sebelumnya dan tidak dapat mengisi sesi ini kembali.
                   </p>
                 </div>
               </div>
@@ -799,17 +843,19 @@ export function QuizApp({
               <div className="quiz-status-alert alert-open">
                 <span className="live-pulse-dot dot-open" />
                 <div>
-                  <strong>SESI KUIS INVESTIGASI TELAH DIBUKA</strong>
-                  <p>Akses kuis aktif. Silakan pilih nama Anda dari daftar peserta dan mulai investigasi.</p>
+                  <strong>SESI {activeMissionShortLabel.toUpperCase()} TELAH DIBUKA</strong>
+                  <p>Akses {activeMissionShortLabel} aktif. Silakan pilih nama Anda dari daftar peserta dan mulai investigasi.</p>
                 </div>
               </div>
             ) : (
               <div className="quiz-status-alert alert-closed" role="alert">
                 <Icon name="lock" size={24} />
                 <div>
-                  <strong>SESI KUIS SAAT INI SEDANG DITUTUP</strong>
+                  <strong>
+                    SESI {closedScopeLabel} SAAT INI SEDANG DITUTUP
+                  </strong>
                   <p>
-                    Akses pengerjaan kuis belum dibuka atau telah dikunci oleh pengawas. Silakan pilih nama Anda terlebih dahulu dan tunggu instruksi pengawas untuk membuka sesi kuis dari sistem. Halaman akan aktif secara otomatis.
+                    Akses pengerjaan belum dibuka atau telah dikunci oleh pengawas. Silakan pilih nama Anda terlebih dahulu dan tunggu instruksi pengawas untuk membuka sesi dari sistem. Halaman akan aktif secara otomatis.
                   </p>
                 </div>
               </div>
@@ -830,15 +876,15 @@ export function QuizApp({
             >
               <span>
                 {isParticipantAlreadyCompleted
-                  ? "Kuis Sudah Pernah Dikerjakan"
+                  ? `${activeMissionShortLabel} Sudah Pernah Dikerjakan`
                   : !isQuizOpen
-                  ? "Menunggu Kuis Dibuka oleh Pengawas..."
-                  : "Mulai Quiz Investigasi (5 Menit)"}
+                  ? "Menunggu Mission Dibuka oleh Pengawas..."
+                  : `Mulai ${activeMissionShortLabel} (10 Menit)`}
               </span>
               <Icon name={!isQuizOpen ? "lock" : "arrow"} size={20} />
             </button>
             <p className="start-disclaimer">
-              Setelah dimulai, kuis (15 soal · KKM {QUIZ_KKM_SCORE}) akan berjalan selama 10 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan kuis secara otomatis.
+              Setelah dimulai, {activeMissionShortLabel} (15 soal) akan berjalan selama 10 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan secara otomatis.
             </p>
           </div>
         </form>
@@ -1126,6 +1172,22 @@ export function QuizApp({
     return (
       <section className="quiz-result-panel panel" aria-labelledby="result-heading">
         <div className="result-header-card">
+          {(() => {
+            const resultPhotoUrl = getParticipantPhotoUrl(
+              quizResult.participant.participantCode,
+              quizResult.participant.participantName
+            );
+            return resultPhotoUrl ? (
+              <div className="quiz-result-photo-wrap">
+                <img
+                  src={resultPhotoUrl}
+                  alt={quizResult.participant.participantName}
+                  className="quiz-result-photo"
+                />
+              </div>
+            ) : null;
+          })()}
+
           <div className="result-badge-top">
             <span className="result-icon-badge">
               <Icon name="award" size={32} />
@@ -1136,7 +1198,7 @@ export function QuizApp({
           </div>
 
           <h2 id="result-heading" className="result-title">
-            Hasil Investigasi Kuis
+            Hasil {QUIZ_CHANNELS.find((c) => c.id === activeQuizKey)?.shortLabel ?? "Mission"}
           </h2>
 
           <div className="participant-summary-pill">
@@ -1169,7 +1231,7 @@ export function QuizApp({
                 </strong>
               </div>
               <div className="detail-stat">
-                <span className="stat-label">Status KKM ({QUIZ_KKM_SCORE})</span>
+                <span className="stat-label">Status</span>
                 <strong
                   className={`stat-value ${
                     isQuizPassed(quizResult.score) ? "text-success" : "text-danger"

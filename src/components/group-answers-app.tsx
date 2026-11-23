@@ -131,7 +131,7 @@ export function GroupAnswersApp({ initialSnapshot }: GroupAnswersAppProps) {
               <div className="group-answer-foot">
                 <span className="group-answer-time">
                   {card.submission
-                    ? `Dikirim: ${formatRegistrationTime(card.submission.submittedAt)}`
+                    ? `${card.submission.submitterName ? `Pengisi: ${card.submission.submitterName} · ` : ""}Dikirim: ${formatRegistrationTime(card.submission.submittedAt)}`
                     : "Menunggu pengiriman kelompok"}
                 </span>
                 <span className="group-answer-zoom-hint">
@@ -197,6 +197,9 @@ export function GroupAnswersApp({ initialSnapshot }: GroupAnswersAppProps) {
             {activeZoomed.submission && (
               <div className="group-answer-zoom-foot">
                 <span>
+                  {activeZoomed.submission.submitterName
+                    ? `Nama Pengisi: ${activeZoomed.submission.submitterName} · `
+                    : ""}
                   Waktu Kirim: {formatRegistrationTime(activeZoomed.submission.submittedAt)}
                 </span>
               </div>

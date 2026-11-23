@@ -39,7 +39,7 @@ const SAMPLE_POWERS: BlindPowerItem[] = [
     description:
       "Penyidikan yang luar biasa membuahkan hasil! Dapatkan poin atau nilai tambahan untuk tim Anda.",
     tone: "gold",
-    imageSrc: "/images/blind-pick/dossier-nilai-extra.png",
+    imageSrc: "/images/blind-pick/dossier-nilai-ekstra-v2.png",
   },
   {
     id: "swap-member",
@@ -52,28 +52,18 @@ const SAMPLE_POWERS: BlindPowerItem[] = [
     imageSrc: "/images/blind-pick/dossier-tukar-anggota.png",
   },
   {
-    id: "swap-fgd",
-    code: "INTERVENSI · 04",
-    category: "TUKAR JAWABAN",
-    title: "Tukar jawaban saat FGD",
-    description:
-      "Ganti atau tukar jawaban tim Anda dengan jawaban tim lawan yang sedang berdiskusi dalam FGD.",
-    tone: "violet",
-    imageSrc: "/images/blind-pick/dossier-tukar-jawaban.png",
-  },
-  {
     id: "reduce-point",
-    code: "SERANGAN · 05",
+    code: "SERANGAN · 04",
     category: "POTONG SKOR",
     title: "Mengurangi poin lawan",
     description:
       "Gunakan bukti pelanggaran untuk memotong atau mengurangi perolehan poin dari tim lawan secara langsung.",
     tone: "amber",
-    imageSrc: "/images/blind-pick/dossier-kurang-poin.png",
+    imageSrc: "/images/blind-pick/dossier-kurang-poin-v2.png",
   },
   {
     id: "zonk-1",
-    code: "KOSONG · 06",
+    code: "KOSONG · 05",
     category: "ZONK · NIHIL",
     title: "Zonk",
     description:

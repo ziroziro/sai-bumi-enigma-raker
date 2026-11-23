@@ -762,7 +762,10 @@ export function AdminStagePanel({
               {stageSubmissions.map((sub) => (
                 <article key={sub.id} className="admin-stage-response-card">
                   <div className="response-card-head">
-                    <strong>{sub.groupName}</strong>
+                    <strong>
+                      {sub.groupName}
+                      {sub.submitterName ? ` · ${sub.submitterName}` : ""}
+                    </strong>
                     <div className="response-card-meta">
                       <span>{formatRegistrationTime(sub.submittedAt)}</span>
                       <button

@@ -6,6 +6,9 @@ export function SiteHeader({
   activeNav,
 }: {
   activeNav?:
+    | "mission"
+    | "mission-1"
+    | "mission-2-5"
     | "pretest"
     | "quiz"
     | "pendaftaran"
@@ -14,9 +17,16 @@ export function SiteHeader({
     | "stage"
     | "leaderboard";
 }) {
+  const isMissionActive =
+    activeNav === "mission" ||
+    activeNav === "mission-1" ||
+    activeNav === "mission-2-5" ||
+    activeNav === "pretest" ||
+    activeNav === "quiz";
+
   return (
     <header className="site-header">
-      <Link href="/pretest" className="brand" aria-label={`${event.name}, menu utama`}>
+      <Link href="/mission" className="brand" aria-label={`${event.name}, menu utama`}>
         <span className="brand-mark" aria-hidden="true">
           <Icon name="compass" size={25} />
         </span>
@@ -26,16 +36,10 @@ export function SiteHeader({
       </Link>
       <nav aria-label="Navigasi utama" className="header-nav">
         <Link
-          href="/pretest"
-          className={`nav-link ${activeNav === "pretest" ? "is-active" : ""}`}
+          href="/mission"
+          className={`nav-link ${isMissionActive ? "is-active" : ""}`}
         >
-          Pretest
-        </Link>
-        <Link
-          href="/quiz"
-          className={`nav-link ${activeNav === "quiz" ? "is-active" : ""}`}
-        >
-          Quiz
+          Mission
         </Link>
         <Link
           href="/stage"

@@ -700,7 +700,7 @@ export default function AdminPage() {
           onClick={() => setActiveAdminTab("quiz")}
         >
           <Icon name="compass" size={16} />
-          <span>Monitoring Kuis Investigasi</span>
+          <span>Monitoring Mission 1 – 5</span>
         </button>
 
         <button
@@ -754,12 +754,12 @@ export default function AdminPage() {
           ===================================================================== */}
       {activeAdminTab === "quiz" && (
         <section className="admin-quiz-section">
-          {/* PEMILIH CHANNEL: PRETEST + QUIZ 1 - 4 */}
+          {/* PEMILIH CHANNEL: MISSION 1 - 5 */}
           <div className="panel" style={{ padding: "16px 20px", marginBottom: "16px" }}>
             <span className="eyebrow" style={{ display: "block", marginBottom: "6px" }}>
-              PILIH SESI PRETEST / QUIZ (1 – 4)
+              PILIH SESI MISSION (1 – 5)
             </span>
-            <div className="quiz-channel-switcher" role="tablist" aria-label="Pilih Channel Pretest atau Quiz">
+            <div className="quiz-channel-switcher" role="tablist" aria-label="Pilih Sesi Mission 1 sampai 5">
               {QUIZ_CHANNELS.map((ch) => {
                 const openNow = Boolean(quizChannelStatuses[ch.id]);
                 const chCount = submissions.filter((s) => (s.quizKey || "pretest") === ch.id).length;
@@ -865,8 +865,8 @@ export default function AdminPage() {
               </div>
               <p className="controller-desc">
                 {isQuizOpen
-                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan kuis investigasi 15 soal · 10 menit (KKM 80)."
-                  : "Akses peserta saat ini DITUTUP. Tombol mulai di halaman peserta terkunci dan menunggu pengawas membuka kuis."}
+                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan soal investigasi 15 soal · 10 menit."
+                  : "Akses peserta saat ini DITUTUP. Tombol mulai di halaman peserta terkunci dan menunggu pengawas membuka sesi."}
               </p>
             </div>
 
@@ -883,8 +883,8 @@ export default function AdminPage() {
                 {togglingQuiz
                   ? "Memproses..."
                   : isQuizOpen
-                  ? "TUTUP KUIS (KUNCI AKSES)"
-                  : "BUKA / MULAI KUIS SEKARANG"}
+                  ? "TUTUP SESI (KUNCI AKSES)"
+                  : "BUKA / MULAI SESI SEKARANG"}
               </span>
             </button>
           </section>
@@ -929,7 +929,7 @@ export default function AdminPage() {
                       <th>Nama Peserta</th>
                       <th>Kelompok</th>
                       <th>Nilai</th>
-                      <th>Status KKM (80)</th>
+                      <th>Status</th>
                       <th>Benar</th>
                       <th>Salah</th>
                       <th>Durasi</th>

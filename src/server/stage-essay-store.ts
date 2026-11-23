@@ -5,7 +5,7 @@ import {
   buildStageEssaySnapshot,
   getStageGroupName,
   normalizeGoogleSpreadsheetCsvUrl,
-  parseStageScoresSpreadsheetCsv,
+  parseStageAndBestGroupSpreadsheetCsv,
   STATIC_STAGE_SPREADSHEET_URL,
   TOTAL_STAGE_COUNT,
   type LeaderboardDisplayMode,
@@ -148,6 +148,7 @@ export function getStageEssaySnapshot(): StageEssayStateSnapshot {
 export function submitGroupStageEssay(input: {
   stageNumber?: number;
   groupNumber: number;
+  submitterName?: string;
   detail: string;
   photoDataUrl?: string | null;
 }): { submission: StageEssaySubmission; snapshot: StageEssayStateSnapshot } {
@@ -161,7 +162,7 @@ export function submitGroupStageEssay(input: {
   }
 
   const stageNumber = state.activeStageNumber;
-  const { groupNumber, detail, photoDataUrl } = input;
+  const { groupNumber, submitterName, detail, photoDataUrl } = input;
 
   if (groupNumber < 1 || groupNumber > 4) {
     throw new StageEssayError("INVALID_GROUP", "Pilihan kelompok tidak valid.", 400);
@@ -183,6 +184,7 @@ export function submitGroupStageEssay(input: {
     stageNumber,
     groupNumber,
     groupName: getStageGroupName(groupNumber),
+    submitterName: submitterName?.trim() || undefined,
     detail: detail.trim(),
     photoDataUrl: photoDataUrl && photoDataUrl.startsWith("data:image/") ? photoDataUrl : null,
     submittedAt: new Date().toISOString(),
@@ -324,20 +326,30 @@ export function upsertStageScores(newScores: StageScoreEntry[]): StageEssayState
 export function importStageScoresFromCsvText(csvText: string): StageEssayStateSnapshot {
   const state = getState();
   if (!state.syncedRowStageMap) state.syncedRowStageMap = {};
-  const parsed = parseStageScoresSpreadsheetCsv(csvText, {
+  const parsed = parseStageAndBestGroupSpreadsheetCsv(csvText, {
     activeStageNumber: state.activeStageNumber,
     rowStageMap: state.syncedRowStageMap,
   });
-  if (parsed.length === 0) {
+  if (parsed.scores.length === 0 && Object.keys(parsed.bestGroupScores).length === 0) {
     throw new StageEssayError(
       "EMPTY_CSV_SCORES",
       "Format data spreadsheet tidak dikenali atau belum memiliki angka nilai. Pastikan kolom berisi Stage (1-10) dan nama keempat kelompok.",
       400
     );
   }
+  if (Object.keys(parsed.bestGroupScores).length > 0) {
+    state.bestGroupScores = {
+      ...(state.bestGroupScores || {}),
+      ...parsed.bestGroupScores,
+    };
+  }
   state.lastSpreadsheetSyncAt = new Date().toISOString();
   state.lastSpreadsheetSyncError = null;
-  return upsertStageScores(parsed);
+  if (parsed.scores.length > 0) {
+    return upsertStageScores(parsed.scores);
+  }
+  persist();
+  return getStageEssaySnapshot();
 }
 
 export async function syncStageScoresFromGoogleSpreadsheet(
@@ -369,20 +381,30 @@ export async function syncStageScoresFromGoogleSpreadsheet(
       );
     }
 
-    const parsedScores = parseStageScoresSpreadsheetCsv(csvText, {
+    const parsed = parseStageAndBestGroupSpreadsheetCsv(csvText, {
       activeStageNumber: state.activeStageNumber,
       rowStageMap: state.syncedRowStageMap,
     });
-    if (parsedScores.length === 0) {
+    if (parsed.scores.length === 0 && Object.keys(parsed.bestGroupScores).length === 0) {
       throw new Error(
         "Spreadsheet berhasil dibuka, namun belum ditemukan baris penilaian yang valid."
       );
     }
 
+    if (Object.keys(parsed.bestGroupScores).length > 0) {
+      state.bestGroupScores = {
+        ...(state.bestGroupScores || {}),
+        ...parsed.bestGroupScores,
+      };
+    }
+
     state.lastSpreadsheetSyncAt = new Date().toISOString();
     state.lastSpreadsheetSyncError = null;
-    // Akumulasi antar sesi: nilai sesi sebelumnya tetap tersimpan, baris baru masuk ke Sesi Aktif
-    return upsertStageScores(parsedScores);
+    if (parsed.scores.length > 0) {
+      return upsertStageScores(parsed.scores);
+    }
+    persist();
+    return getStageEssaySnapshot();
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Gagal melakukan sinkronisasi dengan Google Spreadsheet.";

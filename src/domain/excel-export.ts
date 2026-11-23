@@ -380,11 +380,11 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
   const passedCount = submissions.filter((s) => s.score >= 80).length;
 
   const rows: RowInput[] = [
-    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI NILAI QUIZ (15 SOAL · KKM 80)"] },
+    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI NILAI MISSION (15 SOAL)"] },
     { style: 3, cells: [`Waktu Unduh: ${exportTime}`] },
     {
       cells: [
-        `Total Peserta: ${submissions.length} orang | Lulus (≥80): ${passedCount} | Tidak Lulus (<80): ${submissions.length - passedCount} | Rata-rata: ${avgScore}`,
+        `Total Peserta: ${submissions.length} orang | Lulus: ${passedCount} | Tidak Lulus: ${submissions.length - passedCount} | Rata-rata: ${avgScore}`,
       ],
     },
     { cells: [] },
@@ -396,7 +396,7 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
         "Nama Peserta",
         "Kelompok Tim",
         "Skor (100)",
-        "Status KKM (80)",
+        "Status",
         "Jawaban Benar",
         "Jawaban Salah",
         "Waktu Pengerjaan",
