@@ -1,3 +1,4 @@
+import { ATTENDANCE_ROSTER } from "./attendance";
 import type { Participant, RegisteredGroup } from "./registration";
 
 export interface QuizOption {
@@ -129,7 +130,23 @@ export function detectParticipantGroup(
     }
   }
 
-  // 2. Fallback based on sequence (3x9 + 1x8 = 35)
+  // 2. Match official ATTENDANCE_ROSTER by NIK or normalized name
+  const norm = (raw: string) =>
+    raw
+      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toUpperCase();
+  const cleanCode = participant.code.trim().toUpperCase();
+  const cleanName = norm(participant.name);
+  const rosterMatch = ATTENDANCE_ROSTER.find(
+    (m) => m.nik.toUpperCase() === cleanCode || norm(m.nama) === cleanName
+  );
+  if (rosterMatch && rosterMatch.groupNumber >= 1 && rosterMatch.groupNumber <= 4) {
+    return rosterMatch.groupNumber;
+  }
+
+  // 3. Fallback based on sequence (3x9 + 1x8 = 35)
   const idx = allParticipants.findIndex(
     (p) => p.id === participant.id || p.code === participant.code
   );

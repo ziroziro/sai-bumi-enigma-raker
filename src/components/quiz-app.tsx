@@ -19,6 +19,7 @@ import {
   type QuizResult,
 } from "@/domain/quiz";
 import { createRegistrationRepository } from "@/repositories";
+import { ATTENDANCE_ROSTER } from "@/domain/attendance";
 import { getParticipantPhotoUrl } from "@/domain/participant-photos";
 import type { Participant, RegistrationSnapshot } from "@/domain/registration";
 import { Icon } from "./icon";
@@ -227,7 +228,28 @@ export function QuizApp({
         const repo = await createRegistrationRepository(configuration);
         const data = await repo.getSnapshot();
         if (active) {
-          setSnapshot(data);
+          // Pastikan seluruh Supervisor resmi dari ATTENDANCE_ROSTER (termasuk COSMOS RUDIANTO) tersedia di Mission
+          const normName = (raw: string) =>
+            raw
+              .replace(/[^a-zA-Z0-9\s]/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .toUpperCase();
+          const existingNames = new Set(data.participants.map((p) => normName(p.name)));
+          const extraSupervisors: Participant[] = ATTENDANCE_ROSTER.filter(
+            (m) => m.jabatan === "SUPERVISOR" && !existingNames.has(normName(m.nama))
+          ).map((m) => ({
+            id: `roster-${m.nik}`,
+            code: m.nik,
+            name: m.nama,
+          }));
+          const mergedParticipants = [...data.participants, ...extraSupervisors].sort((a, b) =>
+            a.name.localeCompare(b.name, "id")
+          );
+          setSnapshot({
+            ...data,
+            participants: mergedParticipants,
+          });
           setLoadingParticipants(false);
         }
       } catch {
