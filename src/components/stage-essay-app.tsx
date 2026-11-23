@@ -15,6 +15,8 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
   const [snapshot, setSnapshot] = useState<StageEssayStateSnapshot>(initialSnapshot);
   const [selectedGroupNumber, setSelectedGroupNumber] = useState<string>("");
   const [detailInput, setDetailInput] = useState<string>("");
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [photoFileName, setPhotoFileName] = useState<string>("");
 
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
@@ -75,6 +77,29 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
     };
   }, [refreshState]);
 
+  function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImageMime = file.type.startsWith("image/");
+    const isImageExt = /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif|svg)$/i.test(file.name);
+    if (!isImageMime && !isImageExt) {
+      setErrorMsg("Format file tidak didukung. Harap pilih file foto/gambar (JPG, PNG, WEBP, GIF, dll).");
+      e.target.value = "";
+      return;
+    }
+
+    setErrorMsg(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setPhotoDataUrl(reader.result);
+        setPhotoFileName(file.name);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   async function handleSubmitEssay(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedGroupNumber) {
@@ -100,6 +125,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
         body: JSON.stringify({
           groupNumber: groupNum,
           detail: detailInput.trim(),
+          photoDataUrl: photoDataUrl || null,
         }),
       });
 
@@ -127,6 +153,8 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
 
       setDetailInput("");
       setSelectedGroupNumber("");
+      setPhotoDataUrl(null);
+      setPhotoFileName("");
       setSubmittedSuccess({
         groupName: groupLabel,
         message:
@@ -293,6 +321,49 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
                 required
                 disabled={submitting}
               />
+            </div>
+
+            <div className="form-field-group">
+              <label htmlFor="stage-photo-upload" className="field-label">
+                Upload Foto Bukti / Lampiran (Opsional · Format Foto)
+              </label>
+              <div className="stage-photo-upload-box">
+                <input
+                  id="stage-photo-upload"
+                  type="file"
+                  accept="image/*"
+                  className="stage-photo-input"
+                  onChange={handlePhotoFileChange}
+                  disabled={submitting}
+                />
+                {photoDataUrl ? (
+                  <div className="stage-photo-preview-wrap">
+                    <img
+                      src={photoDataUrl}
+                      alt="Preview lampiran foto"
+                      className="stage-photo-preview"
+                    />
+                    <div className="stage-photo-preview-meta">
+                      <span>{photoFileName || "Foto terpilih"}</span>
+                      <button
+                        type="button"
+                        className="btn-quiz-reset"
+                        style={{ height: "32px", padding: "0 12px", fontSize: "12px" }}
+                        onClick={() => {
+                          setPhotoDataUrl(null);
+                          setPhotoFileName("");
+                        }}
+                      >
+                        Hapus Foto
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="stage-photo-hint">
+                    Mendukung dengan format foto (JPG, PNG, WEBP)
+                  </p>
+                )}
+              </div>
             </div>
 
             <button

@@ -7,6 +7,8 @@ import { formatRegistrationTime } from "@/config/event";
 import {
   generateStageSpreadsheetTemplateCsv,
   STAGE_OFFICIAL_GROUPS,
+  STAGE_RUBRIC_ASPECTS,
+  STATIC_STAGE_SPREADSHEET_URL,
   TOTAL_STAGE_COUNT,
   type StageEssayStateSnapshot,
 } from "@/domain/stage-essay";
@@ -29,12 +31,57 @@ export function AdminStagePanel({
   const [inspectedSession, setInspectedSession] = useState<number>(
     snapshot?.activeStageNumber || 1
   );
-  const [sheetUrlInput, setSheetUrlInput] = useState<string>(snapshot?.spreadsheetUrl ?? "");
   const [csvPasteInput, setCsvPasteInput] = useState<string>("");
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [scoreDrafts, setScoreDrafts] = useState<Record<number, string>>({});
+  const [bestGroupDrafts, setBestGroupDrafts] = useState<Record<number, string>>({});
+
+  function getBestGroupDraftValue(groupNumber: number): string {
+    if (typeof bestGroupDrafts[groupNumber] === "string") {
+      return bestGroupDrafts[groupNumber];
+    }
+    const existing = snapshot?.bestGroupScores?.[groupNumber];
+    return typeof existing === "number" ? String(existing) : "";
+  }
+
+  async function handleSaveBestGroupScores(e: React.FormEvent) {
+    e.preventDefault();
+    const scoresObj: Record<number, number> = {};
+    for (const grp of STAGE_OFFICIAL_GROUPS) {
+      const raw = getBestGroupDraftValue(grp.number).trim().replace(",", ".");
+      const num = Number(raw);
+      if (raw !== "" && Number.isFinite(num)) {
+        scoresObj[grp.number] = num;
+      }
+    }
+    if (Object.keys(scoresObj).length === 0) {
+      setErrorMsg("Masukkan minimal 1 nilai Total Average kelompok.");
+      return;
+    }
+    await runPostAction(
+      "save-best-group",
+      { action: "save_best_group_scores", scores: scoresObj },
+      "Nilai Total Average Best Kelompok berhasil disimpan."
+    );
+    setBestGroupDrafts({});
+  }
+
+  function handlePrefillBestFromAverage() {
+    if (!snapshot) return;
+    const nextDrafts: Record<number, string> = {};
+    for (const grp of STAGE_OFFICIAL_GROUPS) {
+      const cum = snapshot.cumulativeStandings.find((c) => c.groupNumber === grp.number);
+      if (cum && cum.scoredStagesCount > 0) {
+        const avg = Math.round((cum.totalScore / cum.scoredStagesCount) * 100) / 100;
+        nextDrafts[grp.number] = String(avg);
+      } else {
+        nextDrafts[grp.number] = "0";
+      }
+    }
+    setBestGroupDrafts(nextDrafts);
+  }
 
   const currentStage = useMemo(
     () =>
@@ -85,7 +132,6 @@ export function AdminStagePanel({
       }
       if (data.snapshot) {
         onSnapshotChange(data.snapshot);
-        setSheetUrlInput(data.snapshot.spreadsheetUrl);
       }
       setNotice(data.message || fallbackMessage);
     } catch {
@@ -329,6 +375,10 @@ export function AdminStagePanel({
               <Icon name="arrow" size={14} />
               <span>Lihat Halaman Form</span>
             </Link>
+            <Link href="/jawaban-kelompok" target="_blank" className="btn-admin-action">
+              <Icon name="search" size={14} />
+              <span>Jawaban Kelompok</span>
+            </Link>
             <Link href="/leaderboard" target="_blank" className="btn-admin-action">
               <Icon name="award" size={14} />
               <span>Lihat Halaman Leaderboard</span>
@@ -372,6 +422,171 @@ export function AdminStagePanel({
         </div>
       </div>
 
+      {/* KONTROL SESI YANG DITAMPILKAN DI HALAMAN JAWABAN KELOMPOK */}
+      <div className="panel admin-dept-cards-manager">
+        <div className="admin-dept-manager-header">
+          <div>
+            <h3>Tampilan Halaman Jawaban Kelompok (Sesi 1 – 10)</h3>
+            <p>
+              Atur sesi mana yang ditampilkan pada halaman <strong>/jawaban-kelompok</strong>{" "}
+              (saat ini menampilkan <strong>Sesi {snapshot.displayAnswersStageNumber}</strong>).
+            </p>
+          </div>
+          <div className="admin-stage-mini-actions">
+            <Link href="/jawaban-kelompok" target="_blank" className="btn-admin-action">
+              <Icon name="arrow" size={14} />
+              <span>Buka /jawaban-kelompok</span>
+            </Link>
+          </div>
+        </div>
+
+        <div className="stage-tabs-grid">
+          {Array.from({ length: TOTAL_STAGE_COUNT }, (_, idx) => idx + 1).map((stNum) => {
+            const stSummary = snapshot.stages.find((s) => s.stageNumber === stNum);
+            const isDisplayed = snapshot.displayAnswersStageNumber === stNum;
+            return (
+              <button
+                key={`disp-${stNum}`}
+                type="button"
+                className={`stage-tab-pill ${isDisplayed ? "is-selected" : ""}`}
+                disabled={busyAction !== null}
+                onClick={() =>
+                  void runPostAction(
+                    `set-display-${stNum}`,
+                    { action: "set_display_answers_stage", stageNumber: stNum },
+                    `Halaman Jawaban Kelompok disetel ke Sesi ${stNum}.`
+                  )
+                }
+              >
+                <span className="stage-tab-num">
+                  Sesi {stNum}
+                  {isDisplayed && <em className="stage-live-badge">TAMPIL</em>}
+                </span>
+                <span className="stage-tab-meta">
+                  {stSummary?.submissionsCount ?? 0}/4 Jawaban
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* LEADERBOARD BEST KELOMPOK (TOTAL AVERAGE · INPUT MANUAL ADMIN) */}
+      <div className="panel admin-dept-cards-manager">
+        <div className="admin-dept-manager-header">
+          <div>
+            <h3>Leaderboard Best Kelompok (Total Average)</h3>
+            <p>
+              Pilih mode tampilan halaman <strong>/leaderboard</strong>: tampilkan per sesi (
+              <strong>Sesi {snapshot.leaderboardStageNumber}</strong>) atau tampilkan{" "}
+              <strong>Best Kelompok (Total Average)</strong> dengan nilai yang diinput Admin di
+              bawah ini.
+            </p>
+          </div>
+          <div className="admin-stage-mini-actions">
+            <button
+              type="button"
+              className={`btn-admin-action ${
+                snapshot.leaderboardMode === "session" ? "btn-unlock-dept-page" : ""
+              }`}
+              disabled={busyAction !== null}
+              onClick={() =>
+                void runPostAction(
+                  "mode-session",
+                  { action: "set_leaderboard_mode", mode: "session" },
+                  `Leaderboard menampilkan Sesi ${snapshot.leaderboardStageNumber}.`
+                )
+              }
+            >
+              <Icon name="compass" size={14} />
+              <span>
+                {snapshot.leaderboardMode === "session"
+                  ? `✓ Aktif: Sesi ${snapshot.leaderboardStageNumber}`
+                  : `Tampilkan Sesi ${snapshot.leaderboardStageNumber}`}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`btn-admin-action ${
+                snapshot.leaderboardMode === "best_group" ? "btn-unlock-dept-page" : ""
+              }`}
+              disabled={busyAction !== null}
+              onClick={() =>
+                void runPostAction(
+                  "mode-best",
+                  { action: "set_leaderboard_mode", mode: "best_group" },
+                  "Leaderboard menampilkan Best Kelompok."
+                )
+              }
+            >
+              <Icon name="award" size={14} />
+              <span>
+                {snapshot.leaderboardMode === "best_group"
+                  ? "✓ Aktif: Best Kelompok"
+                  : "Tampilkan Best Kelompok"}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={(e) => void handleSaveBestGroupScores(e)} className="stage-scores-form">
+          <div className="rubric-summary-grid">
+            {STAGE_OFFICIAL_GROUPS.map((grp) => (
+              <div key={`best-${grp.number}`} className="rubric-summary-card">
+                <label
+                  htmlFor={`best-group-score-${grp.number}`}
+                  className="field-label"
+                  style={{ marginBottom: "4px" }}
+                >
+                  Kelompok {grp.number} · {grp.name}
+                </label>
+                <input
+                  id={`best-group-score-${grp.number}`}
+                  type="number"
+                  step="0.01"
+                  className="quiz-input"
+                  placeholder="Total Average (misal: 88.5)"
+                  value={getBestGroupDraftValue(grp.number)}
+                  onChange={(e) =>
+                    setBestGroupDrafts((prev) => ({
+                      ...prev,
+                      [grp.number]: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="admin-stage-mini-actions"
+            style={{ marginTop: "14px", justifyContent: "flex-end" }}
+          >
+            <button
+              type="button"
+              className="btn-admin-action"
+              onClick={handlePrefillBestFromAverage}
+              disabled={busyAction !== null}
+            >
+              <Icon name="refresh" size={14} />
+              <span>Hitung Rata-Rata Otomatis</span>
+            </button>
+            <button
+              type="submit"
+              className="btn-primary-link"
+              disabled={busyAction !== null}
+            >
+              <Icon name="check" size={15} />
+              <span>
+                {busyAction === "save-best-group"
+                  ? "Menyimpan..."
+                  : "Simpan Nilai Best Kelompok"}
+              </span>
+            </button>
+          </div>
+        </form>
+      </div>
+
       {notice && (
         <div className="notice success-notice" role="status">
           <Icon name="check" size={18} />
@@ -386,17 +601,27 @@ export function AdminStagePanel({
         </div>
       )}
 
-      {/* GENERATE NILAI DARI SPREADSHEET */}
+      {/* GENERATE NILAI DARI SPREADSHEET (STATIS TERINTEGRASI) */}
       <div className="panel admin-dept-cards-manager">
         <div className="admin-dept-manager-header">
           <div>
-            <h3>Generate Nilai dari Google Spreadsheet</h3>
+            <h3>Integrasi Nilai Google Spreadsheet (Statis · Bobot 100%)</h3>
             <p>
-              Nilai dari setiap sesi di Spreadsheet otomatis <strong>dijumlahkan (akumulasi)</strong>{" "}
-              untuk membentuk peringkat Top 3 di halaman Leaderboard.
+              Terhubung permanen ke Spreadsheet penilaian resmi. Nilai dihitung otomatis dari 4
+              aspek rubrik (<strong>30% + 25% + 25% + 20% = 100%</strong>) dan diakumulasikan ke
+              Leaderboard.
             </p>
           </div>
           <div className="admin-stage-mini-actions">
+            <a
+              href={STATIC_STAGE_SPREADSHEET_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="btn-admin-action"
+            >
+              <Icon name="arrow" size={15} />
+              <span>Buka Spreadsheet</span>
+            </a>
             <button
               type="button"
               className="btn-admin-action"
@@ -422,19 +647,19 @@ export function AdminStagePanel({
             <input
               type="url"
               className="quiz-input"
-              placeholder="Tempel link Google Spreadsheet (https://docs.google.com/spreadsheets/d/...)..."
-              value={sheetUrlInput}
-              onChange={(e) => setSheetUrlInput(e.target.value)}
+              value={STATIC_STAGE_SPREADSHEET_URL}
+              readOnly
+              aria-label="URL Google Spreadsheet Statis"
             />
             <button
               type="button"
               className="btn-primary-link"
-              disabled={busyAction !== null || !sheetUrlInput.trim()}
+              disabled={busyAction !== null}
               onClick={() =>
                 void runPostAction(
                   "sync-sheet",
-                  { action: "sync_spreadsheet", spreadsheetUrl: sheetUrlInput.trim() },
-                  "Nilai dari Google Spreadsheet berhasil di-generate."
+                  { action: "sync_spreadsheet" },
+                  "Nilai dari Google Spreadsheet statis berhasil di-generate."
                 )
               }
             >
@@ -442,10 +667,27 @@ export function AdminStagePanel({
               <span>
                 {busyAction === "sync-sheet"
                   ? "Meng-generate..."
-                  : "Generate dari Spreadsheet"}
+                  : `Generate Nilai Sesi ${snapshot.activeStageNumber} dari Spreadsheet`}
               </span>
             </button>
           </div>
+
+          <div className="rubric-summary-grid" aria-label="Bobot Penilaian Spreadsheet">
+            {STAGE_RUBRIC_ASPECTS.map((asp) => (
+              <div key={asp.key} className="rubric-summary-card">
+                <div className="rubric-card-head">
+                  <strong>{asp.label}</strong>
+                </div>
+                <p>{asp.criteria}</p>
+              </div>
+            ))}
+          </div>
+
+          {snapshot.lastSpreadsheetSyncAt && (
+            <p className="leaderboard-sync-chip" style={{ display: "inline-flex", marginTop: "8px" }}>
+              Update Spreadsheet Terakhir: {formatRegistrationTime(snapshot.lastSpreadsheetSyncAt)}
+            </p>
+          )}
 
           {snapshot.lastSpreadsheetSyncError && (
             <p className="text-danger" style={{ fontSize: "12px" }}>

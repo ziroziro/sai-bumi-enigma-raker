@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getServerAttendanceMetadata,
   recordServerAttendance,
+  recordServerRoomMovement,
   resetAllServerAttendance,
 } from "@/server/attendance-store";
 
@@ -14,6 +15,7 @@ export async function GET() {
     return NextResponse.json(
       {
         records: meta.records,
+        movements: meta.movements,
         lastResetAt: meta.lastResetAt,
         deletedNiks: meta.deletedNiks,
       },
@@ -33,15 +35,31 @@ export async function POST(req: Request) {
     const body = await req.json();
     if (body.resetAll) {
       const records = await resetAllServerAttendance();
-      return NextResponse.json({ success: true, records });
+      return NextResponse.json({ success: true, records, movements: [] });
     }
-    const { nik, timestamp } = body;
+    const { nik, timestamp, sessionType, reason } = body;
     if (!nik || typeof nik !== "string") {
       return NextResponse.json({ error: "NIK diperlukan." }, { status: 400 });
     }
 
-    const records = await recordServerAttendance(nik.trim().toUpperCase(), timestamp);
-    return NextResponse.json({ success: true, records });
+    const cleanNik = nik.trim().toUpperCase();
+    if (sessionType === "leave_room" || sessionType === "return_room") {
+      const result = await recordServerRoomMovement(
+        cleanNik,
+        sessionType,
+        typeof timestamp === "string" ? timestamp : undefined,
+        typeof reason === "string" ? reason.trim() : undefined
+      );
+      return NextResponse.json({
+        success: true,
+        records: result.records,
+        movements: result.movements,
+      });
+    }
+
+    const records = await recordServerAttendance(cleanNik, timestamp);
+    const meta = await getServerAttendanceMetadata();
+    return NextResponse.json({ success: true, records, movements: meta.movements });
   } catch {
     return NextResponse.json({ error: "Gagal mencatat kehadiran." }, { status: 500 });
   }
@@ -50,7 +68,12 @@ export async function POST(req: Request) {
 export async function DELETE() {
   try {
     const records = await resetAllServerAttendance();
-    return NextResponse.json({ success: true, message: "Semua data absensi telah dikosongkan.", records });
+    return NextResponse.json({
+      success: true,
+      message: "Semua data absensi telah dikosongkan.",
+      records,
+      movements: [],
+    });
   } catch {
     return NextResponse.json({ error: "Gagal mengosongkan data absensi." }, { status: 500 });
   }

@@ -2,7 +2,6 @@ import { event } from "@/config/event";
 import { getDataConfiguration } from "@/server/config";
 import { QuizApp } from "@/components/quiz-app";
 import { SiteHeader } from "@/components/site-header";
-import { Icon } from "@/components/icon";
 
 export const dynamic = "force-dynamic";
 
@@ -27,26 +26,15 @@ export default function QuizPage() {
             </div>
             <div className="hero-details">
               <p>
-                Selamat datang di tantangan investigasi! Uji kemampuan observasi, analisis deduksi, dan wawasan Enigma Sai Bumi bersama tim Anda.
+                Selamat datang di halaman Quiz! Sesi Quiz yang tampil di halaman ini otomatis mengikuti Quiz yang sedang diaktifkan oleh Admin.
               </p>
-              <div className="schedule">
-                {event.schedule.map((item) => (
-                  <div key={item.label}>
-                    <Icon name="calendar" size={17} />
-                    <span>
-                      <span className="schedule-label">{item.label}</span>
-                      <time dateTime={item.start}>{item.display}</time>
-                    </span>
-                  </div>
-                ))}
-              </div>
               <p className="hero-instruction">
-                Pilih <strong>nama Anda</strong> dari daftar peserta. Kelompok tim Anda akan terdeteksi secara otomatis (Lupin, Detectif Jubun, Conan, atau Holmes). Selesaikan kuis dalam waktu <strong>5 menit</strong> satu per satu secara berurutan.
+                Pilih <strong>nama Anda</strong> dari daftar peserta. Selesaikan <strong>15 soal</strong> dalam waktu <strong>10 menit</strong> (KKM: <strong>80</strong>).
               </p>
             </div>
           </div>
         </section>
-        <QuizApp configuration={getDataConfiguration()} />
+        <QuizApp configuration={getDataConfiguration()} mode="quiz" />
       </main>
       <footer className="site-footer">
         <div className="tapis-line" aria-hidden="true" />

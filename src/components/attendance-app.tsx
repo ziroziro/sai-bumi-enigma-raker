@@ -5,7 +5,10 @@ import type { Html5Qrcode } from "html5-qrcode";
 import {
   ATTENDANCE_ROSTER,
   findMemberByBarcode,
+  getMemberRoomSummary,
   type AttendanceMember,
+  type AttendanceSessionType,
+  type RoomMovementLog,
 } from "@/domain/attendance";
 import { Icon } from "./icon";
 
@@ -128,8 +131,15 @@ export function AttendanceApp() {
     () => false
   );
 
-  // Attendance Records: NIK -> ISO timestamp
-  const [, setRecords] = useState<Record<string, string>>({});
+  // Attendance Records: NIK -> ISO timestamp, plus room movement logs (izin keluar / masuk kembali)
+  const [records, setRecords] = useState<Record<string, string>>({});
+  const [movements, setMovements] = useState<RoomMovementLog[]>([]);
+
+  // Active attendance session mode: check_in | leave_room | return_room
+  const [sessionType, setSessionType] = useState<AttendanceSessionType>("check_in");
+  const [leaveReason, setLeaveReason] = useState("");
+  const [lastScannedSession, setLastScannedSession] = useState<AttendanceSessionType>("check_in");
+  const [lastScannedReason, setLastScannedReason] = useState<string>("");
 
   // Scanner state
   const [scanError, setScanError] = useState<string | null>(null);
@@ -174,6 +184,9 @@ export function AttendanceApp() {
             setRecords(serverRecords);
             saveStoredRecords(serverRecords);
           }
+          if (Array.isArray(data.movements)) {
+            setMovements(data.movements as RoomMovementLog[]);
+          }
         }
       } catch {
         // use local
@@ -198,48 +211,82 @@ export function AttendanceApp() {
     };
   }, []);
 
-  // Execute attendance check-in after radar search completes
-  const executeAttendanceConfirmation = useCallback((member: AttendanceMember) => {
-    const now = new Date();
-    const isoStr = now.toISOString();
+  // Execute attendance check-in / leave_room / return_room after radar search completes
+  const executeAttendanceConfirmation = useCallback(
+    (member: AttendanceMember) => {
+      const now = new Date();
+      const isoStr = now.toISOString();
+      const activeSession = sessionType;
+      const cleanReason = activeSession === "leave_room" ? leaveReason.trim() : "";
 
-    // Record attendance locally
-    setRecords((prev) => {
-      const updated = {
-        ...prev,
-        [member.nik]: prev[member.nik] || isoStr,
-      };
-      saveStoredRecords(updated);
-      return updated;
-    });
-
-    // Sync attendance to server database with automatic retry for resilience
-    const payload = JSON.stringify({ nik: member.nik, timestamp: isoStr });
-    void fetch("/api/attendance", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: payload,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("sync_failed");
-      })
-      .catch(() => {
-        setTimeout(() => {
-          void fetch("/api/attendance", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: payload,
-          }).catch(() => {});
-        }, 800);
+      // Record attendance locally
+      setRecords((prev) => {
+        const updated = {
+          ...prev,
+          [member.nik]: prev[member.nik] || isoStr,
+        };
+        saveStoredRecords(updated);
+        return updated;
       });
 
-    // Set active scanned member and initiate typewriter animation on ID Card
-    setScannedMember(member);
-    setScannedTime(isoStr);
-    setTypedNameCount(0);
-    setRevealedFieldsCount(0);
-    playScanBeep();
-  }, []);
+      if (activeSession === "leave_room" || activeSession === "return_room") {
+        const localEntry: RoomMovementLog = {
+          id: `local-${member.nik}-${activeSession}-${Date.now()}`,
+          nik: member.nik,
+          action: activeSession,
+          timestamp: isoStr,
+          ...(cleanReason ? { reason: cleanReason } : {}),
+        };
+        setMovements((prev) => [...prev, localEntry]);
+      }
+
+      // Sync attendance / room movement to server database with automatic retry for resilience
+      const payload = JSON.stringify({
+        nik: member.nik,
+        timestamp: isoStr,
+        sessionType: activeSession,
+        ...(cleanReason ? { reason: cleanReason } : {}),
+      });
+      void fetch("/api/attendance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error("sync_failed");
+          const data = await res.json();
+          if (data.records) {
+            setRecords(data.records);
+            saveStoredRecords(data.records);
+          }
+          if (Array.isArray(data.movements)) {
+            setMovements(data.movements as RoomMovementLog[]);
+          }
+        })
+        .catch(() => {
+          setTimeout(() => {
+            void fetch("/api/attendance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: payload,
+            }).catch(() => {});
+          }, 800);
+        });
+
+      // Set active scanned member and initiate typewriter animation on ID Card
+      setLastScannedSession(activeSession);
+      setLastScannedReason(cleanReason);
+      if (activeSession === "leave_room") {
+        setLeaveReason("");
+      }
+      setScannedMember(member);
+      setScannedTime(isoStr);
+      setTypedNameCount(0);
+      setRevealedFieldsCount(0);
+      playScanBeep();
+    },
+    [sessionType, leaveReason]
+  );
 
   // Trigger searching radar animation with magnifying glass
   const triggerSearchAnimation = useCallback(
@@ -642,6 +689,59 @@ export function AttendanceApp() {
             </div>
             <h2 className="controls-heading">Pindai Barcode Agen</h2>
 
+            {/* SESSION MODE SWITCHER (HADIR / IZIN KELUAR / MASUK KEMBALI) */}
+            <div className="attendance-session-box">
+              <span className="attendance-session-label">PILIH SESI ABSENSI</span>
+              <div className="attendance-session-switcher" role="tablist" aria-label="Sesi Absensi">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sessionType === "check_in"}
+                  className={`attendance-session-btn ${
+                    sessionType === "check_in" ? "is-active is-checkin" : ""
+                  }`}
+                  onClick={() => setSessionType("check_in")}
+                >
+                  Absen Hadir
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sessionType === "leave_room"}
+                  className={`attendance-session-btn ${
+                    sessionType === "leave_room" ? "is-active is-leave" : ""
+                  }`}
+                  onClick={() => setSessionType("leave_room")}
+                >
+                  Izin Keluar
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sessionType === "return_room"}
+                  className={`attendance-session-btn ${
+                    sessionType === "return_room" ? "is-active is-return" : ""
+                  }`}
+                  onClick={() => setSessionType("return_room")}
+                >
+                  Masuk Kembali
+                </button>
+              </div>
+
+              {sessionType === "leave_room" && (
+                <div className="attendance-reason-wrap">
+                  <input
+                    type="text"
+                    className="quiz-input attendance-reason-input"
+                    placeholder="Keterangan izin keluar (opsional, misal: Toilet / Telepon)..."
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    maxLength={80}
+                  />
+                </div>
+              )}
+            </div>
+
             {/* CAMERA TOGGLE & PREVIEW */}
             <div className="camera-viewport-wrap">
               <div className={`scanner-camera-frame ${isCameraActive ? "is-active" : "is-hidden"}`}>
@@ -933,7 +1033,9 @@ export function AttendanceApp() {
                         >
                           <span className="info-lbl">KELOMPOK TIM</span>
                           <strong className="info-val text-gold">
-                            {scannedMember.namaKelompok} (Tim {scannedMember.groupNumber})
+                            {scannedMember.groupNumber > 0
+                              ? `${scannedMember.namaKelompok} (Tim ${scannedMember.groupNumber})`
+                              : "—"}
                           </strong>
                         </div>
 
@@ -970,26 +1072,59 @@ export function AttendanceApp() {
                       </div>
 
                       {/* ATTENDANCE CONFIRMED STAMP BANNER */}
-                      <div className="id-card-attendance-stamp">
-                        <div className="stamp-left">
-                          <Icon name="award" size={22} />
-                          <div>
-                            <strong>STATUS KEHADIRAN: TERABSENSI RESMI</strong>
-                            <span>
-                              Waktu Scan:{" "}
-                              {scannedTime
-                                ? new Date(scannedTime).toLocaleString("id-ID", {
-                                    dateStyle: "full",
-                                    timeStyle: "medium",
-                                    timeZone: "Asia/Jakarta",
-                                  })
-                                : "-"}{" "}
-                              WIB
-                            </span>
+                      {(() => {
+                        const summary = getMemberRoomSummary(scannedMember.nik, records, movements);
+                        const isLeave = lastScannedSession === "leave_room";
+                        const isReturn = lastScannedSession === "return_room";
+                        const stampTitle = isLeave
+                          ? "STATUS RUANGAN: IZIN KELUAR RUANGAN"
+                          : isReturn
+                          ? "STATUS RUANGAN: MASUK KEMBALI KE RUANGAN"
+                          : "STATUS KEHADIRAN: TERABSENSI RESMI";
+                        const stampBadge = isLeave
+                          ? "IZIN KELUAR"
+                          : isReturn
+                          ? "MASUK KEMBALI"
+                          : "CHECK-IN VALID";
+
+                        return (
+                          <div
+                            className={`id-card-attendance-stamp ${
+                              isLeave ? "is-leave" : isReturn ? "is-return" : ""
+                            }`}
+                          >
+                            <div className="stamp-left">
+                              <Icon name="award" size={22} />
+                              <div>
+                                <strong>{stampTitle}</strong>
+                                <span>
+                                  Waktu Scan:{" "}
+                                  {scannedTime
+                                    ? new Date(scannedTime).toLocaleString("id-ID", {
+                                        dateStyle: "full",
+                                        timeStyle: "medium",
+                                        timeZone: "Asia/Jakarta",
+                                      })
+                                    : "-"}{" "}
+                                  WIB
+                                </span>
+                                {lastScannedReason ? (
+                                  <span className="stamp-extra-note">
+                                    Keterangan: {lastScannedReason}
+                                  </span>
+                                ) : null}
+                                {summary.leaveCount > 0 ? (
+                                  <span className="stamp-extra-note">
+                                    Riwayat Ruangan: {summary.leaveCount}x keluar ·{" "}
+                                    {summary.returnCount}x masuk kembali
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="stamp-seal">{stampBadge}</div>
                           </div>
-                        </div>
-                        <div className="stamp-seal">CHECK-IN VALID</div>
-                      </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

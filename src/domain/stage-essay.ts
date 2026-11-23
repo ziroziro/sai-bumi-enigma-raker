@@ -2,6 +2,46 @@ import { z } from "zod";
 
 export const TOTAL_STAGE_COUNT = 10;
 
+export const STATIC_STAGE_SPREADSHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1wU906kwjcFFgEtcNAUijrWsfYoc_vep5xTfwqQOsACU/edit?gid=1587789440#gid=1587789440";
+
+export const STAGE_RUBRIC_ASPECTS = [
+  {
+    key: "feasibility",
+    number: 1,
+    label: "1. Project Feasibility & Business Alignment (30%)",
+    weight: 0.3,
+    weightLabel: "30%",
+    criteria:
+      "Apakah Feedback memungkinkan untuk dijalankan dengan mempertimbangkan kebutuhan dan prioritas bisnis, ketersediaan sumber daya, serta kondisi operasional",
+  },
+  {
+    key: "crossFunction",
+    number: 2,
+    label: "2. Cross Function (25%)",
+    weight: 0.25,
+    weightLabel: "25%",
+    criteria: "Apakah project ini ada cross function dengan dep lain",
+  },
+  {
+    key: "relevansi",
+    number: 3,
+    label: "3. Relevansi Feedback terhadap Project (25%)",
+    weight: 0.25,
+    weightLabel: "25%",
+    criteria: "Feedback sesuai dengan materi, project, dan permasalahan yang dipresentasikan",
+  },
+  {
+    key: "delivery",
+    number: 4,
+    label: "4. Delivery Feedback (20%)",
+    weight: 0.2,
+    weightLabel: "20%",
+    criteria:
+      "Feedback disampaikan secara jelas, sistematis, profesional, dan mudah dipahami presenter.",
+  },
+] as const;
+
 export const STAGE_OFFICIAL_GROUPS = [
   { number: 1, name: "Team Lupin", aliases: ["lupin", "team lupin", "kelompok 1", "kel 1", "tim 1"] },
   {
@@ -64,6 +104,7 @@ export interface StageEssaySubmission {
   groupNumber: number; // 1..4
   groupName: string;
   detail: string;
+  photoDataUrl?: string | null;
   submittedAt: string;
 }
 
@@ -120,18 +161,27 @@ export interface StageSessionSummary {
   }>;
 }
 
+export type LeaderboardDisplayMode = "session" | "best_group";
+
 export interface StageEssayStateSnapshot {
   isFormOpen: boolean;
   isLeaderboardRevealed: boolean;
   leaderboardRevealId: number;
+  leaderboardMode: LeaderboardDisplayMode;
   activeStageNumber: number;
+  displayAnswersStageNumber: number;
+  leaderboardStageNumber: number;
   completedStageNumbers: number[];
   spreadsheetUrl: string;
   lastSpreadsheetSyncAt: string | null;
   lastSpreadsheetSyncError: string | null;
   submissions: StageEssaySubmission[];
   scores: StageScoreEntry[];
+  bestGroupScores: Record<number, number>;
   stages: StageSessionSummary[];
+  stageLeaderboardStandings: CumulativeLeaderboardItem[];
+  stageLeaderboardTop3: CumulativeLeaderboardItem[];
+  bestGroupStandings: CumulativeLeaderboardItem[];
   cumulativeStandings: CumulativeLeaderboardItem[];
   cumulativeTop3: CumulativeLeaderboardItem[];
 }
@@ -144,6 +194,14 @@ export const submitStageEssaySchema = z.object({
     .trim()
     .min(3, "Detail jawaban tidak boleh kosong (minimal 3 karakter).")
     .max(15000, "Detail jawaban terlalu panjang."),
+  photoDataUrl: z
+    .string()
+    .refine(
+      (v) => v === "" || v.startsWith("data:image/"),
+      "File yang diunggah harus berupa format foto (JPG, PNG, WEBP, GIF, dll)."
+    )
+    .nullable()
+    .optional(),
 });
 
 export function normalizeGoogleSpreadsheetCsvUrl(rawUrl: string): string {
@@ -212,13 +270,142 @@ function parseNumberScore(raw: string | undefined): number | null {
   return Number.isFinite(num) ? Math.round(num * 100) / 100 : null;
 }
 
-export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry[] {
+function parseRubricAspectScore(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "-") return null;
+  const direct = parseNumberScore(trimmed);
+  if (direct !== null) return direct;
+  // Format Google Form: "1 - Kurang", "2 - Cukup", "3 - Baik", "4 - Sangat Baik"
+  const leadingNum = /^(\d+(?:[.,]\d+)?)/.exec(trimmed);
+  if (leadingNum && leadingNum[1]) {
+    const val = Number(leadingNum[1].replace(",", "."));
+    return Number.isFinite(val) ? val : null;
+  }
+  return null;
+}
+
+export function parseStageScoresSpreadsheetCsv(
+  csvText: string,
+  options?: {
+    activeStageNumber?: number;
+    rowStageMap?: Record<string, number>;
+  }
+): StageScoreEntry[] {
   const rows = parseCsvRows(csvText);
   if (rows.length < 2) return [];
 
   const header = rows[0]!.map((h) => h.trim());
   const nowIso = new Date().toISOString();
   const entryMap = new Map<string, StageScoreEntry>();
+
+  // 0. Deteksi format Rubrik Form Penilaian 4 Aspek (30% / 25% / 25% / 20%)
+  const timestampIdx = header.findIndex((h) => /timestamp|waktu|tanggal/i.test(h));
+  const feasibilityIdx = header.findIndex((h) =>
+    /feasibility|business alignment|30%/i.test(h)
+  );
+  const crossFunctionIdx = header.findIndex((h) => /cross\s*function/i.test(h));
+  const relevansiIdx = header.findIndex((h) => /relevansi/i.test(h));
+  const deliveryIdx = header.findIndex((h) => /delivery|20%/i.test(h));
+  const formGroupIdx = header.findIndex((h) => /\b(kelompok|team|tim|group)\b/i.test(h));
+  const explicitStageIdx = header.findIndex((h) => /\b(sesi|stage|babak|round)\b/i.test(h));
+  const projectDeptIdx = header.findIndex((h) => /\b(project\s*dept|dept|departemen)\b/i.test(h));
+
+  if (
+    feasibilityIdx >= 0 &&
+    crossFunctionIdx >= 0 &&
+    relevansiIdx >= 0 &&
+    deliveryIdx >= 0 &&
+    formGroupIdx >= 0
+  ) {
+    const occurrenceCounter = new Map<string, number>();
+    const activeStage =
+      options?.activeStageNumber &&
+      options.activeStageNumber >= 1 &&
+      options.activeStageNumber <= TOTAL_STAGE_COUNT
+        ? options.activeStageNumber
+        : undefined;
+    const rowStageMap = options?.rowStageMap;
+
+    const sessionBuckets = new Map<
+      string,
+      {
+        stageNumber: number;
+        groupNumber: number;
+        totalScore: number;
+        details: string[];
+      }
+    >();
+
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r]!;
+      const grpNum = matchStageGroupNumber(row[formGroupIdx] ?? "");
+      if (!grpNum) continue;
+
+      const v1 = parseRubricAspectScore(row[feasibilityIdx]);
+      const v2 = parseRubricAspectScore(row[crossFunctionIdx]);
+      const v3 = parseRubricAspectScore(row[relevansiIdx]);
+      const v4 = parseRubricAspectScore(row[deliveryIdx]);
+      if (v1 === null && v2 === null && v3 === null && v4 === null) continue;
+
+      const weighted =
+        Math.round(
+          ((v1 ?? 0) * 0.3 + (v2 ?? 0) * 0.25 + (v3 ?? 0) * 0.25 + (v4 ?? 0) * 0.2) * 100
+        ) / 100;
+
+      const deptLabel = (projectDeptIdx >= 0 ? row[projectDeptIdx] : "")?.trim() || "Dept";
+      const tsLabel = (timestampIdx >= 0 ? row[timestampIdx] : "")?.trim() || `row-${r}`;
+      const rowKey = `${tsLabel}|${deptLabel.toUpperCase()}|${grpNum}|${v1 ?? 0}|${v2 ?? 0}|${v3 ?? 0}|${v4 ?? 0}`;
+
+      let stageNum: number | null = null;
+      if (explicitStageIdx >= 0) {
+        stageNum = matchStageNumber(row[explicitStageIdx] ?? "");
+      }
+      if (!stageNum && rowStageMap && typeof rowStageMap[rowKey] === "number") {
+        stageNum = rowStageMap[rowKey]!;
+      }
+      if (!stageNum && activeStage !== undefined) {
+        stageNum = activeStage;
+      }
+      if (!stageNum) {
+        const occKey = `${grpNum}-${deptLabel.toUpperCase()}`;
+        const nextOcc = (occurrenceCounter.get(occKey) ?? 0) + 1;
+        occurrenceCounter.set(occKey, nextOcc);
+        stageNum = Math.min(nextOcc, TOTAL_STAGE_COUNT);
+      }
+
+      if (rowStageMap && typeof rowStageMap[rowKey] !== "number") {
+        rowStageMap[rowKey] = stageNum;
+      }
+
+      const bKey = `${stageNum}-${grpNum}`;
+      const existing = sessionBuckets.get(bKey);
+      if (existing) {
+        existing.totalScore = Math.round((existing.totalScore + weighted) * 100) / 100;
+        existing.details.push(`${deptLabel}: ${weighted}`);
+      } else {
+        sessionBuckets.set(bKey, {
+          stageNumber: stageNum,
+          groupNumber: grpNum,
+          totalScore: weighted,
+          details: [`${deptLabel}: ${weighted}`],
+        });
+      }
+    }
+
+    for (const bucket of sessionBuckets.values()) {
+      entryMap.set(`${bucket.stageNumber}-${bucket.groupNumber}`, {
+        stageNumber: bucket.stageNumber,
+        groupNumber: bucket.groupNumber,
+        groupName: getStageGroupName(bucket.groupNumber),
+        score: bucket.totalScore,
+        note: bucket.details.join(" · "),
+        updatedAt: nowIso,
+      });
+    }
+
+    return Array.from(entryMap.values());
+  }
 
   const groupCols: Array<{ colIndex: number; groupNumber: number }> = [];
   header.forEach((colName, idx) => {
@@ -282,9 +469,9 @@ export function parseStageScoresSpreadsheetCsv(csvText: string): StageScoreEntry
     return Array.from(entryMap.values());
   }
 
-  let stageColIdx = header.findIndex((h) => /stage|sesi|babak|pos/i.test(h));
-  let groupColIdx = header.findIndex((h) => /kelompok|team|tim|group|nama/i.test(h));
-  let scoreColIdx = header.findIndex((h) => /nilai|score|poin|skor|point/i.test(h));
+  let stageColIdx = header.findIndex((h) => /\b(stage|sesi|babak|pos)\b/i.test(h));
+  let groupColIdx = header.findIndex((h) => /\b(kelompok|team|tim|group|nama)\b/i.test(h));
+  let scoreColIdx = header.findIndex((h) => /\b(nilai|score|poin|skor|point)\b/i.test(h));
   const noteColIdx = header.findIndex((h) => /catatan|note|keterangan|komentar/i.test(h));
 
   if (stageColIdx === -1) stageColIdx = 0;
@@ -336,13 +523,17 @@ export function buildStageEssaySnapshot(input: {
   isFormOpen?: boolean;
   isLeaderboardRevealed?: boolean;
   leaderboardRevealId?: number;
+  leaderboardMode?: LeaderboardDisplayMode;
   activeStageNumber?: number;
+  displayAnswersStageNumber?: number;
+  leaderboardStageNumber?: number;
   completedStageNumbers?: number[];
   spreadsheetUrl?: string;
   lastSpreadsheetSyncAt?: string | null;
   lastSpreadsheetSyncError?: string | null;
   submissions: StageEssaySubmission[];
   scores: StageScoreEntry[];
+  bestGroupScores?: Record<number, number>;
 }): StageEssayStateSnapshot {
   const activeStageNumber =
     input.activeStageNumber &&
@@ -350,6 +541,20 @@ export function buildStageEssaySnapshot(input: {
     input.activeStageNumber <= TOTAL_STAGE_COUNT
       ? input.activeStageNumber
       : 1;
+
+  const displayAnswersStageNumber =
+    input.displayAnswersStageNumber &&
+    input.displayAnswersStageNumber >= 1 &&
+    input.displayAnswersStageNumber <= TOTAL_STAGE_COUNT
+      ? input.displayAnswersStageNumber
+      : activeStageNumber;
+
+  const leaderboardStageNumber =
+    input.leaderboardStageNumber &&
+    input.leaderboardStageNumber >= 1 &&
+    input.leaderboardStageNumber <= TOTAL_STAGE_COUNT
+      ? input.leaderboardStageNumber
+      : activeStageNumber;
 
   const completedSet = new Set<number>(
     (input.completedStageNumbers ?? []).filter((n) => n >= 1 && n <= TOTAL_STAGE_COUNT)
@@ -466,18 +671,83 @@ export function buildStageEssaySnapshot(input: {
 
   const cumulativeTop3 = cumulativeStandings.slice(0, 3);
 
+  // Per-sesi leaderboard standings (bukan akumulasi)
+  const rawStageStandings = STAGE_OFFICIAL_GROUPS.map((grp) => {
+    const sc = input.scores.find(
+      (item) => item.stageNumber === leaderboardStageNumber && item.groupNumber === grp.number
+    );
+    const val = sc ? Math.round(sc.score * 100) / 100 : 0;
+    return {
+      groupNumber: grp.number,
+      groupName: grp.name,
+      totalScore: val,
+      stageScores: sc ? { [leaderboardStageNumber]: val } : {},
+      scoredStagesCount: sc ? 1 : 0,
+    };
+  }).sort((a, b) => {
+    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+    if (b.scoredStagesCount !== a.scoredStagesCount) return b.scoredStagesCount - a.scoredStagesCount;
+    return a.groupNumber - b.groupNumber;
+  });
+
+  const stageLeaderboardStandings: CumulativeLeaderboardItem[] = rawStageStandings.map(
+    (item, idx) => ({
+      rank: (idx + 1) as 1 | 2 | 3 | 4,
+      ...item,
+    })
+  );
+  const stageLeaderboardTop3 = stageLeaderboardStandings.slice(0, 3);
+
+  const normalizedBestScores: Record<number, number> = {};
+  for (const grp of STAGE_OFFICIAL_GROUPS) {
+    const rawVal = input.bestGroupScores?.[grp.number];
+    if (typeof rawVal === "number" && Number.isFinite(rawVal)) {
+      normalizedBestScores[grp.number] = Math.round(rawVal * 100) / 100;
+    }
+  }
+
+  const bestGroupStandings: CumulativeLeaderboardItem[] = STAGE_OFFICIAL_GROUPS.map((grp) => {
+    const hasVal = typeof normalizedBestScores[grp.number] === "number";
+    const val = hasVal ? normalizedBestScores[grp.number]! : 0;
+    return {
+      groupNumber: grp.number,
+      groupName: grp.name,
+      totalScore: val,
+      stageScores: {},
+      scoredStagesCount: hasVal ? 1 : 0,
+    };
+  })
+    .sort((a, b) => {
+      if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+      return a.groupNumber - b.groupNumber;
+    })
+    .map((item, idx) => ({
+      rank: (idx + 1) as 1 | 2 | 3 | 4,
+      ...item,
+    }));
+
+  const leaderboardMode: LeaderboardDisplayMode =
+    input.leaderboardMode === "best_group" ? "best_group" : "session";
+
   return {
     isFormOpen: Boolean(input.isFormOpen),
     isLeaderboardRevealed: Boolean(input.isLeaderboardRevealed),
     leaderboardRevealId: input.leaderboardRevealId ?? 0,
+    leaderboardMode,
     activeStageNumber,
+    displayAnswersStageNumber,
+    leaderboardStageNumber,
     completedStageNumbers: Array.from(completedSet).sort((a, b) => a - b),
     spreadsheetUrl: input.spreadsheetUrl ?? "",
     lastSpreadsheetSyncAt: input.lastSpreadsheetSyncAt ?? null,
     lastSpreadsheetSyncError: input.lastSpreadsheetSyncError ?? null,
     submissions: [...input.submissions],
     scores: [...input.scores],
+    bestGroupScores: normalizedBestScores,
     stages,
+    stageLeaderboardStandings,
+    stageLeaderboardTop3,
+    bestGroupStandings,
     cumulativeStandings,
     cumulativeTop3,
   };

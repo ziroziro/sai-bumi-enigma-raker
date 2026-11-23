@@ -4,9 +4,13 @@ import {
   getStageEssaySnapshot,
   importStageScoresFromCsvText,
   resetStageSubmissions,
+  saveBestGroupScores,
   setActiveStageNumber,
+  setDisplayAnswersStageNumber,
   setFormOpenStatus,
+  setLeaderboardDisplayMode,
   setLeaderboardRevealedStatus,
+  setLeaderboardStageNumber,
   setStageCompletedStatus,
   StageEssayError,
   syncStageScoresFromGoogleSpreadsheet,
@@ -84,6 +88,56 @@ export async function POST(request: Request) {
       return Response.json({
         success: true,
         message: `Sesi aktif untuk penyimpanan form disetel ke Sesi ${stageNumber}.`,
+        snapshot,
+      });
+    }
+
+    if (action === "set_display_answers_stage") {
+      const stageNumber = Number(body?.stageNumber);
+      const snapshot = setDisplayAnswersStageNumber(stageNumber);
+      return Response.json({
+        success: true,
+        message: `Halaman Jawaban Kelompok kini menampilkan Sesi ${stageNumber}.`,
+        snapshot,
+      });
+    }
+
+    if (action === "set_leaderboard_mode") {
+      const mode = body?.mode === "best_group" ? "best_group" : "session";
+      const snapshot = setLeaderboardDisplayMode(mode);
+      return Response.json({
+        success: true,
+        message:
+          mode === "best_group"
+            ? "Halaman Leaderboard kini menampilkan mode BEST KELOMPOK (Total Average)."
+            : `Halaman Leaderboard kini menampilkan mode Sesi (Sesi ${snapshot.leaderboardStageNumber}).`,
+        snapshot,
+      });
+    }
+
+    if (action === "set_leaderboard_stage") {
+      const stageNumber = Number(body?.stageNumber);
+      const snapshot = setLeaderboardStageNumber(stageNumber);
+      return Response.json({
+        success: true,
+        message: `Halaman Leaderboard disetel ke Sesi ${stageNumber}.`,
+        snapshot,
+      });
+    }
+
+    if (action === "save_best_group_scores") {
+      const raw = body?.scores && typeof body.scores === "object" ? body.scores : {};
+      const parsed: Record<number, number> = {};
+      for (const grpNum of [1, 2, 3, 4]) {
+        const val = Number((raw as Record<string, unknown>)[String(grpNum)]);
+        if (Number.isFinite(val)) {
+          parsed[grpNum] = val;
+        }
+      }
+      const snapshot = saveBestGroupScores(parsed);
+      return Response.json({
+        success: true,
+        message: "Nilai Total Average Best Kelompok berhasil disimpan.",
         snapshot,
       });
     }

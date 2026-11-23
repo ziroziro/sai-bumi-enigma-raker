@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         records: meta.records,
+        movements: meta.movements,
         lastResetAt: meta.lastResetAt,
         deletedNiks: meta.deletedNiks,
       },
@@ -59,12 +60,23 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     if (body.all) {
       const records = await resetAllServerAttendance();
-      return NextResponse.json({ success: true, message: "Semua data absensi telah dikosongkan.", records });
+      return NextResponse.json({
+        success: true,
+        message: "Semua data absensi telah dikosongkan.",
+        records,
+        movements: [],
+      });
     }
 
     if (body.nik) {
       const records = await deleteServerAttendance(String(body.nik).trim().toUpperCase());
-      return NextResponse.json({ success: true, message: `Absensi ${body.nik} telah dihapus.`, records });
+      const meta = await getServerAttendanceMetadata();
+      return NextResponse.json({
+        success: true,
+        message: `Absensi ${body.nik} telah dihapus.`,
+        records,
+        movements: meta.movements,
+      });
     }
 
     return NextResponse.json({ error: "Parameter tidak lengkap." }, { status: 400 });

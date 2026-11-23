@@ -1,11 +1,12 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
-import { findMemberByBarcode } from "@/domain/attendance";
+import { findMemberByBarcode, type RoomMovementLog } from "@/domain/attendance";
 import { createBackendClient } from "./supabase";
 
 export interface AttendanceState {
   records: Record<string, string>;
+  movements: RoomMovementLog[];
   lastResetAt: string | null;
   deletedNiks: string[];
 }
@@ -32,7 +33,7 @@ function isSupabaseConfigured(): boolean {
 
 function readStateFromDisk(): AttendanceState {
   if (isTestRuntime()) {
-    return { records: {}, lastResetAt: null, deletedNiks: [] };
+    return { records: {}, movements: [], lastResetAt: null, deletedNiks: [] };
   }
   try {
     if (fs.existsSync(DATA_FILE_PATH)) {
@@ -40,6 +41,7 @@ function readStateFromDisk(): AttendanceState {
       const parsed = JSON.parse(content);
       return {
         records: typeof parsed.records === "object" && parsed.records !== null ? parsed.records : {},
+        movements: Array.isArray(parsed.movements) ? parsed.movements : [],
         lastResetAt: typeof parsed.lastResetAt === "string" ? parsed.lastResetAt : null,
         deletedNiks: Array.isArray(parsed.deletedNiks) ? parsed.deletedNiks : [],
       };
@@ -49,6 +51,7 @@ function readStateFromDisk(): AttendanceState {
   }
   return {
     records: {},
+    movements: [],
     lastResetAt: null,
     deletedNiks: [],
   };
@@ -155,14 +158,17 @@ export async function getServerAttendanceMetadata(): Promise<AttendanceState> {
       }
     }
 
+    const cachedMovements = getActiveState().movements || [];
     const syncedState: AttendanceState = {
       records: dbRecords,
+      movements: cachedMovements,
       lastResetAt: syncMeta.lastResetAt,
       deletedNiks: syncMeta.deletedNiks,
     };
     setActiveState(syncedState);
     return {
       records: { ...syncedState.records },
+      movements: [...syncedState.movements],
       lastResetAt: syncedState.lastResetAt,
       deletedNiks: [...syncedState.deletedNiks],
     };
@@ -171,6 +177,7 @@ export async function getServerAttendanceMetadata(): Promise<AttendanceState> {
   const state = getActiveState();
   return {
     records: { ...state.records },
+    movements: [...(state.movements || [])],
     lastResetAt: state.lastResetAt,
     deletedNiks: [...state.deletedNiks],
   };
@@ -228,11 +235,51 @@ export async function recordServerAttendance(
       ...state.records,
       [cleanNik]: state.records[cleanNik] || isoStr,
     },
+    movements: [...(state.movements || [])],
     lastResetAt: state.lastResetAt,
     deletedNiks: state.deletedNiks.filter((n) => n !== cleanNik),
   };
   setActiveState(nextState);
   return { ...nextState.records };
+}
+
+export async function recordServerRoomMovement(
+  nik: string,
+  action: "leave_room" | "return_room",
+  timestamp?: string,
+  reason?: string
+): Promise<{ records: Record<string, string>; movements: RoomMovementLog[] }> {
+  const cleanNik = nik.trim().toUpperCase();
+  const isoStr = timestamp || new Date().toISOString();
+
+  // Pastikan peserta tercatat hadir apabila langsung scan keluar/masuk ruangan
+  const updatedRecords = await recordServerAttendance(cleanNik, isoStr);
+
+  const state = getActiveState();
+  const entry: RoomMovementLog = {
+    id: `${cleanNik}-${action}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    nik: cleanNik,
+    action,
+    timestamp: isoStr,
+    ...(reason ? { reason } : {}),
+  };
+
+  const nextMovements = [...(state.movements || []), entry];
+  const nextState: AttendanceState = {
+    records: {
+      ...updatedRecords,
+      [cleanNik]: updatedRecords[cleanNik] || isoStr,
+    },
+    movements: nextMovements,
+    lastResetAt: state.lastResetAt,
+    deletedNiks: state.deletedNiks.filter((n) => n !== cleanNik),
+  };
+  setActiveState(nextState);
+
+  return {
+    records: { ...nextState.records },
+    movements: [...nextState.movements],
+  };
 }
 
 export async function deleteServerAttendance(nik: string): Promise<Record<string, string>> {
@@ -256,6 +303,12 @@ export async function deleteServerAttendance(nik: string): Promise<Record<string
       : [...syncMeta.deletedNiks, cleanNik];
     await persistSyncStateToSupabase(syncMeta.lastResetAt, updatedDeleted);
 
+    const state = getActiveState();
+    setActiveState({
+      ...state,
+      movements: (state.movements || []).filter((m) => m.nik.toUpperCase() !== cleanNik),
+    });
+
     const fresh = await getServerAttendanceMetadata();
     return fresh.records;
   }
@@ -269,6 +322,7 @@ export async function deleteServerAttendance(nik: string): Promise<Record<string
 
   setActiveState({
     records: nextRecords,
+    movements: (state.movements || []).filter((m) => m.nik.toUpperCase() !== cleanNik),
     lastResetAt: state.lastResetAt,
     deletedNiks: nextDeleted,
   });
@@ -294,6 +348,7 @@ export async function resetAllServerAttendance(): Promise<Record<string, string>
 
   setActiveState({
     records: {},
+    movements: [],
     lastResetAt: resetIso,
     deletedNiks: [],
   });

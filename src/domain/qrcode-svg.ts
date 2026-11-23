@@ -60,8 +60,12 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function formatTeamDisplay(member: AttendanceMember | null): string {
+function formatTeamDisplay(member: AttendanceMember | null): string | null {
   if (!member) return "THE SAI BUMI ENIGMA";
+  const role = member.jabatan.trim().toUpperCase();
+  if (member.groupNumber <= 0 || role === "MANAGER" || role === "GM" || role === "COO") {
+    return null;
+  }
   switch (member.groupNumber) {
     case 1:
       return "KELOMPOK 1 · TEAM LUPIN";
@@ -211,7 +215,7 @@ export function generateQrSvg(
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 540" width="420" height="540" data-barcode="${escapeXml(
     text
   )}" shape-rendering="geometricPrecision" style="background:none;background-color:transparent;">
-    <desc>${escapeXml(text)} - ${escapeXml(ownerName)} (${escapeXml(teamLabel)})</desc>
+    <desc>${escapeXml(text)} - ${escapeXml(ownerName)}${teamLabel ? ` (${escapeXml(teamLabel)})` : ""}</desc>
     <defs>
       <!-- Outer Cast Antique Bronze & 24K Gold Frame -->
       <linearGradient id="antiqueGoldOuter-${uid}" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -407,7 +411,7 @@ export function generateQrSvg(
       <!-- OWNER FULL NAME -->
       <text
         x="210"
-        y="370"
+        y="${teamLabel ? "370" : "391"}"
         font-family="Georgia, 'Times New Roman', serif"
         font-size="${nameFontSize}"
         font-weight="900"
@@ -418,7 +422,9 @@ export function generateQrSvg(
         ${escapeXml(ownerName)}
       </text>
 
-      <!-- Divider Line -->
+      ${
+        teamLabel
+          ? `<!-- Divider Line -->
       <line x1="92" y1="382" x2="328" y2="382" stroke="url(#goldTrim-${uid})" stroke-width="1" opacity="0.65" />
 
       <!-- OWNER GROUP / TEAM HEXAGONAL CRIMSON-GOLD BADGE -->
@@ -439,7 +445,9 @@ export function generateQrSvg(
         letter-spacing="1.8"
       >
         ${escapeXml(teamLabel)}
-      </text>
+      </text>`
+          : ""
+      }
 
       <!-- Bottom Sculpted Shield Tip Crest & Diamond (No Motto Text) -->
       <path

@@ -1,3 +1,4 @@
+import { isValidQuizChannelId, type QuizChannelId } from "@/domain/quiz";
 import { getQuizSystemStatus, setQuizSystemStatus } from "@/server/quiz-service";
 
 export const runtime = "nodejs";
@@ -41,7 +42,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const isOpen = Boolean(body.isOpen);
-    const updated = await setQuizSystemStatus(isOpen);
+    const channel: QuizChannelId = isValidQuizChannelId(body.channel) ? body.channel : "pretest";
+    const updated = await setQuizSystemStatus(isOpen, channel);
     return Response.json({ success: true, status: updated });
   } catch {
     return Response.json({ error: "Gagal memperbarui status kuis." }, { status: 500 });

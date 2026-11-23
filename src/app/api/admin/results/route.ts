@@ -1,3 +1,4 @@
+import { isValidQuizChannelId } from "@/domain/quiz";
 import {
   deleteQuizSubmission,
   getQuizSubmissionsList,
@@ -50,8 +51,15 @@ export async function DELETE(request: Request) {
   try {
     const body = await request.json();
     if (body.all) {
-      await resetAllQuizSubmissions();
-      return Response.json({ success: true, message: "Semua data nilai kuis berhasil dikosongkan.", submissions: [] });
+      const targetChannel = isValidQuizChannelId(body.quizKey) ? body.quizKey : undefined;
+      const submissions = await resetAllQuizSubmissions(targetChannel);
+      return Response.json({
+        success: true,
+        message: targetChannel
+          ? `Data nilai ${targetChannel.toUpperCase()} berhasil dikosongkan.`
+          : "Semua data nilai kuis berhasil dikosongkan.",
+        submissions,
+      });
     }
 
     if (body.id || body.participantId) {

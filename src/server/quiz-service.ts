@@ -1,6 +1,11 @@
 import "server-only";
 import { getGroupTitle } from "@/config/event";
-import type { QuizQuestion, QuizSubmissionRecord } from "@/domain/quiz";
+import {
+  calculateQuizScore,
+  type QuizChannelId,
+  type QuizQuestion,
+  type QuizSubmissionRecord,
+} from "@/domain/quiz";
 import type { Participant } from "@/domain/registration";
 import { createBackendClient } from "./supabase";
 import {
@@ -16,6 +21,7 @@ import {
 } from "./quiz-store";
 
 export interface SubmitQuizPayload {
+  quizKey?: QuizChannelId;
   participant: Participant;
   groupNumber: number;
   questions: QuizQuestion[];
@@ -76,10 +82,12 @@ export async function deleteQuizSubmission(submissionIdOrParticipantId: string):
   return getQuizSubmissionsList();
 }
 
-export async function resetAllQuizSubmissions(): Promise<QuizSubmissionRecord[]> {
-  resetAllLocalQuizSubmissions();
+export async function resetAllQuizSubmissions(
+  quizKey?: QuizChannelId
+): Promise<QuizSubmissionRecord[]> {
+  const remaining = resetAllLocalQuizSubmissions(quizKey);
 
-  if (process.env.APP_DATA_MODE !== "demo") {
+  if (process.env.APP_DATA_MODE !== "demo" && !quizKey) {
     try {
       const { client, config } = createBackendClient();
       try {
@@ -102,7 +110,7 @@ export async function resetAllQuizSubmissions(): Promise<QuizSubmissionRecord[]>
     }
   }
 
-  return [];
+  return remaining;
 }
 
 export async function getQuizSystemStatus(): Promise<QuizSystemStatus> {
@@ -144,10 +152,13 @@ export async function getQuizSystemStatus(): Promise<QuizSystemStatus> {
   return getQuizStatus();
 }
 
-export async function setQuizSystemStatus(isOpen: boolean): Promise<QuizSystemStatus> {
-  const localUpdated = setQuizStatus(isOpen);
+export async function setQuizSystemStatus(
+  isOpen: boolean,
+  channel: QuizChannelId = "pretest"
+): Promise<QuizSystemStatus> {
+  const localUpdated = setQuizStatus(isOpen, channel);
 
-  if (process.env.APP_DATA_MODE !== "demo") {
+  if (process.env.APP_DATA_MODE !== "demo" && channel === "pretest") {
     try {
       const { client, config } = createBackendClient();
       const { data, error } = await client.rpc("set_quiz_system_status", {
@@ -194,7 +205,8 @@ export async function setQuizSystemStatus(isOpen: boolean): Promise<QuizSystemSt
 }
 
 export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<QuizSubmissionRecord> {
-  const { participant, groupNumber, questions, answers, timeSpentSeconds } = payload;
+  const { quizKey = "pretest", participant, groupNumber, questions, answers, timeSpentSeconds } =
+    payload;
 
   let correctCount = 0;
   questions.forEach((q) => {
@@ -204,11 +216,12 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
   });
 
   const totalQuestions = questions.length;
-  const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+  const score = calculateQuizScore(correctCount, totalQuestions);
   const completedAt = new Date().toISOString();
 
   const record: QuizSubmissionRecord = {
     id: crypto.randomUUID(),
+    quizKey,
     participantId: participant.id,
     participantCode: participant.code,
     participantName: participant.name,
@@ -225,8 +238,8 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
   // Always keep in local server store for instant availability
   recordLocalQuizSubmission(record);
 
-  // If Supabase backend is configured and not in demo mode, attempt to store to database
-  if (process.env.APP_DATA_MODE !== "demo") {
+  // If Supabase backend is configured and not in demo mode (only sync pretest to legacy RPC)
+  if (process.env.APP_DATA_MODE !== "demo" && quizKey === "pretest") {
     try {
       const { client, config } = createBackendClient();
       await client.rpc("submit_quiz_submission", {

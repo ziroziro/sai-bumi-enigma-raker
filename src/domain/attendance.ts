@@ -13,9 +13,66 @@ export interface AttendanceMember {
   barcode: string;
 }
 
+export type AttendanceSessionType = "check_in" | "leave_room" | "return_room";
+
 export interface AttendanceRecord {
   nik: string;
   timestamp: string; // ISO string
+}
+
+export interface RoomMovementLog {
+  id: string;
+  nik: string;
+  action: "leave_room" | "return_room";
+  timestamp: string; // ISO string
+  reason?: string;
+}
+
+export interface MemberRoomSummary {
+  roomState: "not_checked_in" | "in_room" | "outside_room" | "returned_room";
+  leaveCount: number;
+  returnCount: number;
+  lastLeaveAt: string | null;
+  lastReturnAt: string | null;
+  lastReason: string | null;
+  logs: RoomMovementLog[];
+}
+
+export function getMemberRoomSummary(
+  nik: string,
+  records: Record<string, string>,
+  movements: RoomMovementLog[]
+): MemberRoomSummary {
+  const cleanNik = nik.trim().toUpperCase();
+  const isPresent = Boolean(records[cleanNik]);
+  const logs = movements
+    .filter((m) => m.nik.trim().toUpperCase() === cleanNik)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  const leaveLogs = logs.filter((l) => l.action === "leave_room");
+  const returnLogs = logs.filter((l) => l.action === "return_room");
+  const lastLog = logs[logs.length - 1] ?? null;
+  const lastLeave = leaveLogs[leaveLogs.length - 1] ?? null;
+  const lastReturn = returnLogs[returnLogs.length - 1] ?? null;
+
+  let roomState: MemberRoomSummary["roomState"] = "not_checked_in";
+  if (lastLog?.action === "leave_room") {
+    roomState = "outside_room";
+  } else if (lastLog?.action === "return_room") {
+    roomState = "returned_room";
+  } else if (isPresent) {
+    roomState = "in_room";
+  }
+
+  return {
+    roomState,
+    leaveCount: leaveLogs.length,
+    returnCount: returnLogs.length,
+    lastLeaveAt: lastLeave?.timestamp ?? null,
+    lastReturnAt: lastReturn?.timestamp ?? null,
+    lastReason: lastLeave?.reason || null,
+    logs,
+  };
 }
 
 export const ATTENDANCE_TARGET_LOCATION = {
@@ -546,6 +603,202 @@ export const ATTENDANCE_ROSTER: AttendanceMember[] = [
     gender: "L",
     genderLabel: "Laki-laki",
     barcode: "NKAD17003",
+  },
+  {
+    no: 36,
+    nik: "MDMK26011",
+    nama: "COSMOS RUDIANTO",
+    posisi: "IT OPERATIONS & SUPPORT SPV",
+    dept: "IT",
+    namaKelompok: "LUPIN",
+    groupNumber: 3,
+    statusRank: "Agent",
+    jabatan: "SUPERVISOR",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "MDMK26011",
+  },
+  {
+    no: 37,
+    nik: "DMBK11002",
+    nama: "ADI CHANSERRIO",
+    posisi: "TECHNICAL SERVICE MANAGER",
+    dept: "TSD",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMBK11002",
+  },
+  {
+    no: 38,
+    nik: "DMBK15005",
+    nama: "BAMBANG TRI ATMOJO",
+    posisi: "PART MANAGER",
+    dept: "PART",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMBK15005",
+  },
+  {
+    no: 39,
+    nik: "DMMK12023",
+    nama: "NURHAYATI",
+    posisi: "HC3 MANAGER",
+    dept: "HC3",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "P",
+    genderLabel: "Perempuan",
+    barcode: "DMMK12023",
+  },
+  {
+    no: 40,
+    nik: "DMMK19039",
+    nama: "BAGUS KURNIAWAN",
+    posisi: "SALES MANAGER",
+    dept: "SALES",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMMK19039",
+  },
+  {
+    no: 41,
+    nik: "DMMK20007",
+    nama: "M HAIKHAL ARCHI VALIAN",
+    posisi: "ADMINISTRATION MANAGER",
+    dept: "ADMIN",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMMK20007",
+  },
+  {
+    no: 42,
+    nik: "HOHR08004",
+    nama: "WIWID DARNIATI",
+    posisi: "ORGANIZATION & PEOPLE DEVELOPMENT MANAGER",
+    dept: "PDEV",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "P",
+    genderLabel: "Perempuan",
+    barcode: "HOHR08004",
+  },
+  {
+    no: 43,
+    nik: "HOIT12005",
+    nama: "RIKI ZUBRI",
+    posisi: "INFORMATION TECHNOLOGY MANAGER",
+    dept: "IT",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "HOIT12005",
+  },
+  {
+    no: 44,
+    nik: "RIHP08001",
+    nama: "SAHRI MAULUDIN",
+    posisi: "LOGISTIC MANAGER",
+    dept: "LOGISTIC",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "RIHP08001",
+  },
+  {
+    no: 45,
+    nik: "DMMK18005",
+    nama: "JEFRI KRISNA PUTRA",
+    posisi: "PROMOSI",
+    dept: "PROMOTION",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "Chief Detective",
+    jabatan: "MANAGER",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMMK18005",
+  },
+  {
+    no: 46,
+    nik: "DMAD04007",
+    nama: "SINDY PRAMADHITA",
+    posisi: "GM ADMIN",
+    dept: "ADMIN",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "GM",
+    jabatan: "GM",
+    gender: "P",
+    genderLabel: "Perempuan",
+    barcode: "DMAD04007",
+  },
+  {
+    no: 47,
+    nik: "DMMK06016",
+    nama: "DIMAS GENTUR TRIYOGO",
+    posisi: "GM AFTER SALES",
+    dept: "AFTER SALES",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "GM",
+    jabatan: "GM",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMMK06016",
+  },
+  {
+    no: 48,
+    nik: "DMMK09003",
+    nama: "DONY RONALDO",
+    posisi: "GM SALES",
+    dept: "SALES",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "GM",
+    jabatan: "GM",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "DMMK09003",
+  },
+  {
+    no: 49,
+    nik: "BSMK03001",
+    nama: "SRI KRIS KURNIANTO BONSAPIA",
+    posisi: "COO",
+    dept: "EXECUTIVE",
+    namaKelompok: "-",
+    groupNumber: 0,
+    statusRank: "COO",
+    jabatan: "COO",
+    gender: "L",
+    genderLabel: "Laki-laki",
+    barcode: "BSMK03001",
   },
 ];
 

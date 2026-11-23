@@ -1,7 +1,11 @@
 import { formatRegistrationTime, getGroupTitle } from "@/config/event";
 import type { RegistrationSnapshot } from "@/domain/registration";
 import type { QuizSubmissionRecord } from "@/domain/quiz";
-import type { AttendanceMember } from "@/domain/attendance";
+import {
+  getMemberRoomSummary,
+  type AttendanceMember,
+  type RoomMovementLog,
+} from "@/domain/attendance";
 
 const encoder = new TextEncoder();
 
@@ -367,16 +371,22 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
   // Sheet 1: Rekap Nilai Peserta (Urut Ranking)
   const sortedSubmissions = [...submissions].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
+    if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
     return a.timeSpentSeconds - b.timeSpentSeconds;
   });
 
   const totalScore = submissions.reduce((acc, s) => acc + s.score, 0);
   const avgScore = submissions.length > 0 ? (totalScore / submissions.length).toFixed(1) : "0";
+  const passedCount = submissions.filter((s) => s.score >= 80).length;
 
   const rows: RowInput[] = [
-    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI NILAI QUIZ"] },
+    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI NILAI QUIZ (15 SOAL · KKM 80)"] },
     { style: 3, cells: [`Waktu Unduh: ${exportTime}`] },
-    { cells: [`Total Peserta Menyelesaikan: ${submissions.length} orang | Rata-rata Nilai: ${avgScore}`] },
+    {
+      cells: [
+        `Total Peserta: ${submissions.length} orang | Lulus (≥80): ${passedCount} | Tidak Lulus (<80): ${submissions.length - passedCount} | Rata-rata: ${avgScore}`,
+      ],
+    },
     { cells: [] },
     {
       style: 1,
@@ -386,6 +396,7 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
         "Nama Peserta",
         "Kelompok Tim",
         "Skor (100)",
+        "Status KKM (80)",
         "Jawaban Benar",
         "Jawaban Salah",
         "Waktu Pengerjaan",
@@ -401,6 +412,7 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
         s.participantName,
         s.groupName || getGroupTitle(s.groupNumber),
         s.score,
+        s.score >= 80 ? "LULUS" : "TIDAK LULUS",
         `${s.correctCount} / ${s.totalQuestions}`,
         `${s.wrongCount} soal`,
         `${mins}m ${secs}s`,
@@ -411,7 +423,7 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
 
   const mainSheet: SheetDefinition = {
     name: "Rekap Nilai Kuis",
-    cols: [10, 16, 32, 26, 14, 16, 16, 20, 26],
+    cols: [10, 16, 32, 26, 14, 18, 16, 16, 20, 26],
     rows,
   };
 
@@ -420,16 +432,24 @@ export function generateQuizScoresExcel(submissions: QuizSubmissionRecord[]): Ui
 
 export function generateAttendanceExcel(
   roster: AttendanceMember[],
-  records: Record<string, string>
+  records: Record<string, string>,
+  movements: RoomMovementLog[] = []
 ): Uint8Array {
   const exportTime = formatRegistrationTime(new Date().toISOString());
   const attendedCount = roster.filter((m) => records[m.nik]).length;
   const totalCount = roster.length;
+  const outsideCount = roster.filter(
+    (m) => getMemberRoomSummary(m.nik, records, movements).roomState === "outside_room"
+  ).length;
 
   const attendanceRows: RowInput[] = [
-    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI ABSENSI KEHADIRAN"] },
+    { style: 2, cells: ["THE SAI BUMI ENIGMA — REKAPITULASI ABSENSI & IZIN KELUAR/MASUK"] },
     { style: 3, cells: [`Waktu Unduh: ${exportTime}`] },
-    { cells: [`Total Peserta: ${totalCount} | Hadir: ${attendedCount} | Belum Hadir: ${totalCount - attendedCount}`] },
+    {
+      cells: [
+        `Total Peserta: ${totalCount} | Hadir: ${attendedCount} | Belum Hadir: ${totalCount - attendedCount} | Sedang Di Luar Ruangan: ${outsideCount}`,
+      ],
+    },
     { cells: [] },
     {
       style: 1,
@@ -445,12 +465,27 @@ export function generateAttendanceExcel(
         "Gender",
         "Status Kehadiran",
         "Waktu Hadir",
+        "Status Ruangan",
+        "Total Izin Keluar",
+        "Keluar Terakhir",
+        "Masuk Kembali Terakhir",
+        "Keterangan Terakhir",
       ],
     },
     ...roster.map((m) => {
       const timestamp = records[m.nik];
       const isPresent = Boolean(timestamp);
       const timeStr = timestamp ? formatRegistrationTime(timestamp) : "-";
+      const summary = getMemberRoomSummary(m.nik, records, movements);
+      const roomLabel =
+        summary.roomState === "outside_room"
+          ? "DI LUAR RUANGAN"
+          : summary.roomState === "returned_room"
+          ? "DI DALAM (KEMBALI)"
+          : summary.roomState === "in_room"
+          ? "DI DALAM RUANGAN"
+          : "BELUM ABSEN";
+
       return [
         m.no,
         m.nik,
@@ -463,18 +498,23 @@ export function generateAttendanceExcel(
         m.genderLabel,
         isPresent ? "HADIR" : "BELUM HADIR",
         timeStr,
+        roomLabel,
+        summary.leaveCount,
+        summary.lastLeaveAt ? formatRegistrationTime(summary.lastLeaveAt) : "-",
+        summary.lastReturnAt ? formatRegistrationTime(summary.lastReturnAt) : "-",
+        summary.lastReason || "-",
       ];
     }),
   ];
 
   const attendanceSheet: SheetDefinition = {
     name: "Daftar Absensi",
-    cols: [6, 14, 30, 16, 36, 16, 18, 22, 14, 18, 26],
+    cols: [6, 14, 30, 16, 36, 16, 18, 22, 14, 18, 24, 22, 16, 24, 24, 26],
     rows: attendanceRows,
   };
 
   // Group summary sheet
-  const groups = ["Team Lupin", "Detective Lupin", "CONAN", "HOLMES"];
+  const groups = ["Team Lupin", "Detective Lupin", "CONAN", "HOLMES", "LUPIN"];
   const summaryRows: RowInput[] = [
     { style: 2, cells: ["REKAP KEHADIRAN PER KELOMPOK"] },
     { cells: [] },
@@ -482,12 +522,14 @@ export function generateAttendanceExcel(
       style: 1,
       cells: ["Kelompok", "Total Anggota", "Hadir", "Belum Hadir", "Persentase Kehadiran"],
     },
-    ...groups.map((grp) => {
-      const members = roster.filter((m) => m.namaKelompok === grp);
-      const present = members.filter((m) => records[m.nik]).length;
-      const pct = members.length > 0 ? Math.round((present / members.length) * 100) : 0;
-      return [grp, members.length, present, members.length - present, `${pct}%`];
-    }),
+    ...groups
+      .filter((grp) => roster.some((m) => m.namaKelompok === grp))
+      .map((grp) => {
+        const members = roster.filter((m) => m.namaKelompok === grp);
+        const present = members.filter((m) => records[m.nik]).length;
+        const pct = members.length > 0 ? Math.round((present / members.length) * 100) : 0;
+        return [grp, members.length, present, members.length - present, `${pct}%`];
+      }),
   ];
 
   const groupSheet: SheetDefinition = {
@@ -496,7 +538,41 @@ export function generateAttendanceExcel(
     rows: summaryRows,
   };
 
-  return buildXlsxUint8Array([attendanceSheet, groupSheet]);
+  // Room movement chronological log sheet
+  const memberByNik = new Map(roster.map((m) => [m.nik.toUpperCase(), m]));
+  const sortedMovements = [...movements].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  const movementRows: RowInput[] = [
+    { style: 2, cells: ["RIWAYAT IZIN KELUAR & MASUK KEMBALI RUANGAN"] },
+    { style: 3, cells: [`Total Catatan Aktivitas: ${sortedMovements.length}`] },
+    { cells: [] },
+    {
+      style: 1,
+      cells: ["No", "NIK", "Nama Peserta", "Kelompok", "Sesi / Aksi", "Waktu", "Keterangan"],
+    },
+    ...sortedMovements.map((log, idx) => {
+      const m = memberByNik.get(log.nik.toUpperCase());
+      return [
+        idx + 1,
+        log.nik,
+        m?.nama || log.nik,
+        m?.namaKelompok || "-",
+        log.action === "leave_room" ? "IZIN KELUAR RUANGAN" : "MASUK KEMBALI RUANGAN",
+        formatRegistrationTime(log.timestamp),
+        log.reason || "-",
+      ];
+    }),
+  ];
+
+  const movementSheet: SheetDefinition = {
+    name: "Riwayat Keluar Masuk",
+    cols: [6, 14, 30, 20, 24, 26, 30],
+    rows: movementRows,
+  };
+
+  return buildXlsxUint8Array([attendanceSheet, groupSheet, movementSheet]);
 }
 
 /**

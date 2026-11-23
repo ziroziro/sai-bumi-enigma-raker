@@ -6,13 +6,23 @@ import type { StageEssayStateSnapshot } from "@/domain/stage-essay";
 
 import { useEffect, useState } from "react";
 import { officialGroups } from "@/config/event";
-import type { QuizSubmissionRecord } from "@/domain/quiz";
+import {
+  getQuizChannelLabel,
+  QUIZ_CHANNELS,
+  type QuizChannelId,
+  type QuizSubmissionRecord,
+} from "@/domain/quiz";
 import {
   generateQuizScoresExcel,
   generateAttendanceExcel,
   generateBarcodesPngZip,
 } from "@/domain/excel-export";
-import { ATTENDANCE_ROSTER, type AttendanceMember } from "@/domain/attendance";
+import {
+  ATTENDANCE_ROSTER,
+  getMemberRoomSummary,
+  type AttendanceMember,
+  type RoomMovementLog,
+} from "@/domain/attendance";
 import { generateQrBadgePngBlob, generateQrSvg } from "@/domain/qrcode-svg";
 import { Icon } from "@/components/icon";
 
@@ -88,12 +98,21 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [exporting, setExporting] = useState(false);
 
-  // Master quiz status control (Open vs Closed)
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
+  // Master quiz status control per channel (Pretest + Quiz 1..4)
+  const [selectedQuizChannel, setSelectedQuizChannel] = useState<QuizChannelId>("pretest");
+  const [quizChannelStatuses, setQuizChannelStatuses] = useState<Record<QuizChannelId, boolean>>({
+    pretest: false,
+    "quiz-1": false,
+    "quiz-2": false,
+    "quiz-3": false,
+    "quiz-4": false,
+  });
   const [togglingQuiz, setTogglingQuiz] = useState(false);
+  const isQuizOpen = Boolean(quizChannelStatuses[selectedQuizChannel]);
 
   // Attendance State
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, string>>({});
+  const [attendanceMovements, setAttendanceMovements] = useState<RoomMovementLog[]>([]);
   const [attendanceNotice, setAttendanceNotice] = useState<string | null>(null);
   const [attendanceSearch, setAttendanceSearch] = useState("");
 
@@ -113,7 +132,13 @@ export default function AdminPage() {
           const data = await res.json();
           setSubmissions(data.submissions || []);
           if (data.quizStatus) {
-            setIsQuizOpen(Boolean(data.quizStatus.isOpen));
+            setQuizChannelStatuses({
+              pretest: Boolean(data.quizStatus.channels?.pretest ?? data.quizStatus.isOpen),
+              "quiz-1": Boolean(data.quizStatus.channels?.["quiz-1"]),
+              "quiz-2": Boolean(data.quizStatus.channels?.["quiz-2"]),
+              "quiz-3": Boolean(data.quizStatus.channels?.["quiz-3"]),
+              "quiz-4": Boolean(data.quizStatus.channels?.["quiz-4"]),
+            });
           }
           setIsAuthenticated(true);
           void fetchAttendance();
@@ -141,7 +166,13 @@ export default function AdminPage() {
         const data = await res.json();
         setSubmissions(data.submissions || []);
         if (data.quizStatus) {
-          setIsQuizOpen(Boolean(data.quizStatus.isOpen));
+          setQuizChannelStatuses({
+            pretest: Boolean(data.quizStatus.channels?.pretest ?? data.quizStatus.isOpen),
+            "quiz-1": Boolean(data.quizStatus.channels?.["quiz-1"]),
+            "quiz-2": Boolean(data.quizStatus.channels?.["quiz-2"]),
+            "quiz-3": Boolean(data.quizStatus.channels?.["quiz-3"]),
+            "quiz-4": Boolean(data.quizStatus.channels?.["quiz-4"]),
+          });
         }
       }
     } catch {
@@ -163,13 +194,16 @@ export default function AdminPage() {
         if (data.records) {
           setAttendanceRecords(data.records);
         }
+        if (Array.isArray(data.movements)) {
+          setAttendanceMovements(data.movements as RoomMovementLog[]);
+        }
       }
     } catch {
       // fallback
     }
   }
 
-  // Toggle quiz status (Buka / Tutup Kuis)
+  // Toggle quiz status for selected channel (Pretest / Quiz 1..4)
   async function handleToggleQuizStatus() {
     const nextStatus = !isQuizOpen;
     setTogglingQuiz(true);
@@ -178,11 +212,21 @@ export default function AdminPage() {
         method: "POST",
         headers: getAdminHeaders(),
         credentials: "include",
-        body: JSON.stringify({ isOpen: nextStatus }),
+        body: JSON.stringify({ isOpen: nextStatus, channel: selectedQuizChannel }),
       });
       if (res.ok) {
         const data = await res.json();
-        setIsQuizOpen(Boolean(data.status?.isOpen));
+        if (data.status?.channels) {
+          setQuizChannelStatuses({
+            pretest: Boolean(data.status.channels.pretest),
+            "quiz-1": Boolean(data.status.channels["quiz-1"]),
+            "quiz-2": Boolean(data.status.channels["quiz-2"]),
+            "quiz-3": Boolean(data.status.channels["quiz-3"]),
+            "quiz-4": Boolean(data.status.channels["quiz-4"]),
+          });
+        } else {
+          setQuizChannelStatuses((prev) => ({ ...prev, [selectedQuizChannel]: nextStatus }));
+        }
       } else {
         alert("Gagal memperbarui status kuis. Silakan coba lagi.");
       }
@@ -216,11 +260,12 @@ export default function AdminPage() {
     }
   }
 
-  // Reset ALL quiz submissions
+  // Reset quiz submissions for selected channel
   async function handleResetAllQuizSubmissions() {
+    const chLabel = getQuizChannelLabel(selectedQuizChannel);
     if (
       !confirm(
-        "PERINGATAN: Apakah Anda yakin ingin mengosongkan / menghapus SELURUH data hasil kuis peserta? Tindakan ini tidak dapat dibatalkan."
+        `PERINGATAN: Apakah Anda yakin ingin mengosongkan SELURUH data hasil ${chLabel}? Tindakan ini tidak dapat dibatalkan.`
       )
     ) {
       return;
@@ -231,10 +276,11 @@ export default function AdminPage() {
         method: "DELETE",
         headers: getAdminHeaders(),
         credentials: "include",
-        body: JSON.stringify({ all: true }),
+        body: JSON.stringify({ all: true, quizKey: selectedQuizChannel }),
       });
       if (res.ok) {
-        setSubmissions([]);
+        const data = await res.json();
+        setSubmissions(Array.isArray(data.submissions) ? data.submissions : []);
       } else {
         alert("Gagal mengosongkan data kuis.");
       }
@@ -259,6 +305,9 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         setAttendanceRecords(data.records || {});
+        if (Array.isArray(data.movements)) {
+          setAttendanceMovements(data.movements as RoomMovementLog[]);
+        }
         setAttendanceNotice(
           `Kehadiran ${name} (${nik}) berhasil dihapus. Peserta kini dapat di-scan absensi ulang.`
         );
@@ -290,6 +339,7 @@ export default function AdminPage() {
       });
       if (res.ok) {
         setAttendanceRecords({});
+        setAttendanceMovements([]);
         localStorage.removeItem(ATTENDANCE_STORAGE_KEY);
         setAttendanceNotice(
           "Seluruh data absensi peserta berhasil dikosongkan. Semua peserta kini dapat di-scan absensi ulang."
@@ -351,14 +401,22 @@ export default function AdminPage() {
   function handleExportQuizExcel() {
     setExporting(true);
     try {
-      const bytes = generateQuizScoresExcel(submissions);
+      const sorted = [...channelSubmissions].sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
+        if (a.timeSpentSeconds !== b.timeSpentSeconds) {
+          return a.timeSpentSeconds - b.timeSpentSeconds;
+        }
+        return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
+      });
+      const bytes = generateQuizScoresExcel(sorted);
       const blob = new Blob([new Uint8Array(bytes)], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `rekap-nilai-enigma-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `rekap-nilai-${selectedQuizChannel}-enigma-${new Date().toISOString().slice(0, 10)}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -373,7 +431,11 @@ export default function AdminPage() {
   // Handle Attendance Excel Export
   function handleExportAttendanceExcel() {
     try {
-      const bytes = generateAttendanceExcel(ATTENDANCE_ROSTER, attendanceRecords);
+      const bytes = generateAttendanceExcel(
+        ATTENDANCE_ROSTER,
+        attendanceRecords,
+        attendanceMovements
+      );
       const blob = new Blob([bytes as unknown as BlobPart], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -432,32 +494,56 @@ export default function AdminPage() {
     }
   };
 
-  // Filtered submissions
-  const filteredSubmissions = submissions.filter((s) => {
+  // Filter submissions by selected channel (Pretest / Quiz 1..4)
+  const channelSubmissions = submissions.filter(
+    (s) => (s.quizKey || "pretest") === selectedQuizChannel
+  );
+
+  // Sorted & filtered submissions: nilai terbesar + jumlah benar terbanyak + durasi tercepat paling atas
+  const sortedSubmissions = [...channelSubmissions].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
+    if (a.timeSpentSeconds !== b.timeSpentSeconds) {
+      return a.timeSpentSeconds - b.timeSpentSeconds;
+    }
+    return new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime();
+  });
+
+  const overallRankById = new Map<string, number>();
+  sortedSubmissions.forEach((item, idx) => {
+    overallRankById.set(item.id, idx + 1);
+  });
+
+  const filteredSubmissions = sortedSubmissions.filter((s) => {
     const matchesGroup =
       selectedGroupFilter === "all" || s.groupNumber === selectedGroupFilter;
     const matchesQuery =
       searchQuery.trim() === "" ||
-      `${s.participantName} ${s.participantCode}`
+      `${s.participantName} ${s.groupName}`
         .toLowerCase()
         .includes(searchQuery.toLowerCase());
     return matchesGroup && matchesQuery;
   });
 
-  // Calculate quiz statistics
-  const totalSubmissions = submissions.length;
+  // Calculate quiz statistics for selected channel
+  const totalSubmissions = channelSubmissions.length;
   const avgScore =
     totalSubmissions > 0
-      ? (submissions.reduce((acc, s) => acc + s.score, 0) / totalSubmissions).toFixed(1)
+      ? (channelSubmissions.reduce((acc, s) => acc + s.score, 0) / totalSubmissions).toFixed(1)
       : "0";
   const highestScore =
-    totalSubmissions > 0 ? Math.max(...submissions.map((s) => s.score)) : 0;
-  const totalCorrectAll = submissions.reduce((acc, s) => acc + s.correctCount, 0);
+    totalSubmissions > 0 ? Math.max(...channelSubmissions.map((s) => s.score)) : 0;
+  const totalCorrectAll = channelSubmissions.reduce((acc, s) => acc + s.correctCount, 0);
 
   // Attendance stats
   const totalRoster = ATTENDANCE_ROSTER.length;
   const attendedCount = Object.keys(attendanceRecords).length;
   const attendancePercentage = Math.round((attendedCount / totalRoster) * 100);
+  const outsideRoomCount = ATTENDANCE_ROSTER.filter(
+    (m) =>
+      getMemberRoomSummary(m.nik, attendanceRecords, attendanceMovements).roomState ===
+      "outside_room"
+  ).length;
 
   // Filtered attendance roster
   const filteredAttendance = ATTENDANCE_ROSTER.filter((m) => {
@@ -659,7 +745,7 @@ export default function AdminPage() {
           }}
         >
           <Icon name="compass" size={16} />
-          <span>Stage &amp; Spreadsheet (10)</span>
+          <span>Misi &amp; Spreadsheet (10 Sesi)</span>
         </button>
       </nav>
 
@@ -668,7 +754,104 @@ export default function AdminPage() {
           ===================================================================== */}
       {activeAdminTab === "quiz" && (
         <section className="admin-quiz-section">
-          {/* MASTER QUIZ CONTROLLER (BUKA / TUTUP KUIS DARI SISI ADMIN) */}
+          {/* PEMILIH CHANNEL: PRETEST + QUIZ 1 - 4 */}
+          <div className="panel" style={{ padding: "16px 20px", marginBottom: "16px" }}>
+            <span className="eyebrow" style={{ display: "block", marginBottom: "6px" }}>
+              PILIH SESI PRETEST / QUIZ (1 – 4)
+            </span>
+            <div className="quiz-channel-switcher" role="tablist" aria-label="Pilih Channel Pretest atau Quiz">
+              {QUIZ_CHANNELS.map((ch) => {
+                const openNow = Boolean(quizChannelStatuses[ch.id]);
+                const chCount = submissions.filter((s) => (s.quizKey || "pretest") === ch.id).length;
+                return (
+                  <button
+                    key={ch.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selectedQuizChannel === ch.id}
+                    className={`quiz-channel-pill ${
+                      selectedQuizChannel === ch.id ? "is-selected" : ""
+                    } ${openNow ? "is-open" : "is-closed"}`}
+                    onClick={() => setSelectedQuizChannel(ch.id)}
+                  >
+                    <span className={`channel-dot ${openNow ? "dot-open" : "dot-closed"}`} />
+                    <strong>{ch.shortLabel}</strong>
+                    <span className="channel-state">
+                      {openNow ? "DIBUKA" : "TERKUNCI"} · {chCount} peserta
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* FILTER KELOMPOK + EXPORT NILAI + KOSONGKAN HASIL KUIS (DI ATAS KONTROL SESI KUIS) */}
+          <section className="admin-filter-bar panel" style={{ marginBottom: "18px" }}>
+            <div className="filter-group">
+              <span className="filter-label">Filter Kelompok:</span>
+              <div className="filter-pills">
+                <button
+                  type="button"
+                  className={`filter-pill ${selectedGroupFilter === "all" ? "is-active" : ""}`}
+                  onClick={() => setSelectedGroupFilter("all")}
+                >
+                  Semua ({channelSubmissions.length})
+                </button>
+                {officialGroups.map((g) => {
+                  const count = channelSubmissions.filter((s) => s.groupNumber === g.number).length;
+                  return (
+                    <button
+                      key={g.number}
+                      type="button"
+                      className={`filter-pill ${
+                        selectedGroupFilter === g.number ? "is-active" : ""
+                      }`}
+                      onClick={() => setSelectedGroupFilter(g.number)}
+                    >
+                      {g.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="quiz-admin-actions-bar">
+              <div className="quiz-search-input-wrap">
+                <input
+                  type="text"
+                  className="quiz-input"
+                  placeholder="Cari nama peserta atau kelompok..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <div className="quiz-action-buttons-group">
+                <button
+                  type="button"
+                  className="btn-quiz-export"
+                  onClick={handleExportQuizExcel}
+                  disabled={exporting || channelSubmissions.length === 0}
+                >
+                  <Icon name="download" size={16} />
+                  <span>{exporting ? "Menyiapkan..." : "Export Nilai (.xlsx)"}</span>
+                </button>
+
+                {channelSubmissions.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn-quiz-reset"
+                    onClick={handleResetAllQuizSubmissions}
+                    title={`Hapus seluruh data hasil ${getQuizChannelLabel(selectedQuizChannel)}`}
+                  >
+                    <Icon name="close" size={15} />
+                    <span>Kosongkan Hasil {QUIZ_CHANNELS.find((c) => c.id === selectedQuizChannel)?.shortLabel}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* MASTER QUIZ CONTROLLER (BUKA / TUTUP CHANNEL TERPILIH) */}
           <section
             className={`admin-quiz-controller-card panel ${isQuizOpen ? "is-open" : "is-closed"}`}
           >
@@ -676,14 +859,13 @@ export default function AdminPage() {
               <div className="controller-kicker">
                 <span className={`live-pulse-dot ${isQuizOpen ? "dot-open" : "dot-closed"}`} />
                 <strong className="status-title-text">
-                  {isQuizOpen
-                    ? "SESI KUIS SEDANG DIBUKA (AKTIF)"
-                    : "SESI KUIS SEDANG DITUTUP (TERKUNCI)"}
+                  {getQuizChannelLabel(selectedQuizChannel).toUpperCase()}:{" "}
+                  {isQuizOpen ? "SEDANG DIBUKA (AKTIF)" : "SEDANG DITUTUP (TERKUNCI)"}
                 </strong>
               </div>
               <p className="controller-desc">
                 {isQuizOpen
-                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan kuis investigasi 5 menit."
+                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan kuis investigasi 15 soal · 10 menit (KKM 80)."
                   : "Akses peserta saat ini DITUTUP. Tombol mulai di halaman peserta terkunci dan menunggu pengawas membuka kuis."}
               </p>
             </div>
@@ -731,68 +913,6 @@ export default function AdminPage() {
             </div>
           </section>
 
-          {/* FILTER & SEARCH BAR */}
-          <section className="admin-filter-bar">
-            <div className="filter-group">
-              <span className="filter-label">Filter Kelompok:</span>
-              <div className="filter-pills">
-                <button
-                  type="button"
-                  className={`filter-pill ${selectedGroupFilter === "all" ? "is-active" : ""}`}
-                  onClick={() => setSelectedGroupFilter("all")}
-                >
-                  Semua ({submissions.length})
-                </button>
-                {officialGroups.map((g) => {
-                  const count = submissions.filter((s) => s.groupNumber === g.number).length;
-                  return (
-                    <button
-                      key={g.number}
-                      type="button"
-                      className={`filter-pill ${
-                        selectedGroupFilter === g.number ? "is-active" : ""
-                      }`}
-                      onClick={() => setSelectedGroupFilter(g.number)}
-                    >
-                      {g.name} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="search-group">
-              <input
-                type="text"
-                className="quiz-input"
-                placeholder="Cari nama peserta atau kode..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button
-                type="button"
-                className="btn-primary-link"
-                onClick={handleExportQuizExcel}
-                disabled={exporting || submissions.length === 0}
-              >
-                <Icon name="download" size={16} />
-                <span>{exporting ? "Menyiapkan..." : "Export Nilai (.xlsx)"}</span>
-              </button>
-
-              {submissions.length > 0 && (
-                <button
-                  type="button"
-                  className="btn-danger-outline"
-                  onClick={handleResetAllQuizSubmissions}
-                  title="Hapus seluruh data hasil kuis peserta"
-                >
-                  <Icon name="close" size={15} />
-                  <span>Kosongkan Hasil Kuis</span>
-                </button>
-              )}
-            </div>
-          </section>
-
           {/* TABLE OF SUBMISSIONS */}
           <section className="admin-table-section panel">
             {filteredSubmissions.length === 0 ? (
@@ -807,9 +927,9 @@ export default function AdminPage() {
                     <tr>
                       <th>No</th>
                       <th>Nama Peserta</th>
-                      <th>Kode</th>
                       <th>Kelompok</th>
                       <th>Nilai</th>
+                      <th>Status KKM (80)</th>
                       <th>Benar</th>
                       <th>Salah</th>
                       <th>Durasi</th>
@@ -827,26 +947,61 @@ export default function AdminPage() {
                         timeStyle: "short",
                         timeZone: "Asia/Jakarta",
                       });
+                      const overallRank = overallRankById.get(sub.id) ?? index + 1;
+                      const isTop3 = overallRank <= 3;
+                      const isBottom2 =
+                        sortedSubmissions.length >= 4 &&
+                        overallRank > 3 &&
+                        overallRank > sortedSubmissions.length - 2;
+                      const isPassed = sub.score >= 80;
 
                       return (
-                        <tr key={sub.id}>
-                          <td className="col-center">{index + 1}</td>
+                        <tr
+                          key={sub.id}
+                          className={
+                            isTop3
+                              ? `row-quiz-top is-rank-${overallRank}`
+                              : isBottom2
+                              ? "row-quiz-prison"
+                              : ""
+                          }
+                        >
+                          <td className="col-center">
+                            {isTop3 ? (
+                              <span
+                                className={`quiz-rank-badge is-top-${overallRank}`}
+                                title={`Peringkat ${overallRank} (3 Teratas)`}
+                              >
+                                {overallRank === 1 ? "🏆" : overallRank === 2 ? "🥈" : "🥉"}{" "}
+                                {index + 1}
+                              </span>
+                            ) : isBottom2 ? (
+                              <span
+                                className="quiz-rank-badge is-prison"
+                                title="2 Terbawah (Masuk Penjara)"
+                              >
+                                ⛓ {index + 1}
+                              </span>
+                            ) : (
+                              <strong>{index + 1}</strong>
+                            )}
+                          </td>
                           <td className="col-name">
                             <strong>{sub.participantName}</strong>
                           </td>
-                          <td className="col-code">{sub.participantCode}</td>
                           <td className="col-group">{sub.groupName}</td>
                           <td className="col-score">
                             <span
-                              className={`score-tag ${
-                                sub.score >= 90
-                                    ? "score-high"
-                                  : sub.score >= 70
-                                  ? "score-med"
-                                  : "score-low"
-                              }`}
+                              className={`score-tag ${isPassed ? "score-high" : "score-low"}`}
                             >
                               {sub.score}
+                            </span>
+                          </td>
+                          <td className="col-center">
+                            <span
+                              className={`score-tag ${isPassed ? "score-high" : "score-low"}`}
+                            >
+                              {isPassed ? "LULUS" : "TIDAK LULUS"}
                             </span>
                           </td>
                           <td className="col-center text-success">{sub.correctCount}</td>
@@ -948,6 +1103,15 @@ export default function AdminPage() {
               <strong className="stat-value text-danger">{totalRoster - attendedCount} orang</strong>
               <span className="stat-sub">Menunggu verifikasi kehadiran</span>
             </div>
+            <div className="admin-stat-card">
+              <span className="stat-label">Sedang Izin Keluar</span>
+              <strong className="stat-value" style={{ color: "#f59e0b" }}>
+                {outsideRoomCount} orang
+              </strong>
+              <span className="stat-sub">
+                {attendanceMovements.length} total log keluar/masuk
+              </span>
+            </div>
           </section>
 
           {/* SEARCH BAR */}
@@ -981,6 +1145,8 @@ export default function AdminPage() {
                     <th>Rank</th>
                     <th>Status</th>
                     <th>Waktu Hadir</th>
+                    <th>Status Ruangan</th>
+                    <th>Log Keluar / Masuk</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
@@ -995,6 +1161,33 @@ export default function AdminPage() {
                           second: "2-digit",
                         }) + " WIB"
                       : "—";
+                    const roomSummary = getMemberRoomSummary(
+                      m.nik,
+                      attendanceRecords,
+                      attendanceMovements
+                    );
+                    const fmtShort = (iso: string | null) =>
+                      iso
+                        ? new Date(iso).toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "—";
+                    const roomBadgeText =
+                      roomSummary.roomState === "outside_room"
+                        ? "Di Luar Ruangan"
+                        : roomSummary.roomState === "returned_room"
+                        ? "Kembali Masuk"
+                        : roomSummary.roomState === "in_room"
+                        ? "Di Dalam"
+                        : "—";
+                    const roomBadgeClass =
+                      roomSummary.roomState === "outside_room"
+                        ? "score-med"
+                        : roomSummary.roomState === "returned_room" ||
+                          roomSummary.roomState === "in_room"
+                        ? "score-high"
+                        : "score-low";
 
                     return (
                       <tr key={m.nik} className={isPresent ? "row-present" : ""}>
@@ -1006,7 +1199,7 @@ export default function AdminPage() {
                         <td>{m.posisi}</td>
                         <td>{m.dept}</td>
                         <td className="col-group">
-                          {m.namaKelompok} (Tim {m.groupNumber})
+                          {m.groupNumber > 0 ? `${m.namaKelompok} (Tim ${m.groupNumber})` : "—"}
                         </td>
                         <td>{m.statusRank}</td>
                         <td>
@@ -1019,6 +1212,39 @@ export default function AdminPage() {
                           </span>
                         </td>
                         <td className="col-time">{formattedTime}</td>
+                        <td>
+                          {roomSummary.roomState === "not_checked_in" ? (
+                            <span className="text-muted">—</span>
+                          ) : (
+                            <span className={`score-tag ${roomBadgeClass}`}>
+                              {roomBadgeText}
+                            </span>
+                          )}
+                        </td>
+                        <td className="col-time">
+                          {roomSummary.leaveCount > 0 || roomSummary.returnCount > 0 ? (
+                            <div className="room-log-cell">
+                              <span>
+                                Keluar: <strong>{fmtShort(roomSummary.lastLeaveAt)}</strong>
+                              </span>
+                              <span>
+                                Masuk: <strong>{fmtShort(roomSummary.lastReturnAt)}</strong>
+                              </span>
+                              {roomSummary.leaveCount > 1 ? (
+                                <span className="room-log-count">
+                                  ({roomSummary.leaveCount}x izin)
+                                </span>
+                              ) : null}
+                              {roomSummary.lastReason ? (
+                                <span className="room-log-reason">
+                                  Ket: {roomSummary.lastReason}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
                         <td className="col-center">
                           {isPresent ? (
                             <button
@@ -1105,7 +1331,8 @@ export default function AdminPage() {
                 >
                   <div className="catalog-card-header">
                     <span className="member-num-tag">
-                      #{String(member.no).padStart(2, "0")} · Kelompok {member.groupNumber}
+                      #{String(member.no).padStart(2, "0")} ·{" "}
+                      {member.groupNumber > 0 ? `Kelompok ${member.groupNumber}` : member.jabatan}
                     </span>
                     <span className={`status-pill ${isAttended ? "pill-present" : "pill-absent"}`}>
                       {isAttended ? "✓ Hadir" : "Belum Hadir"}
@@ -1119,7 +1346,9 @@ export default function AdminPage() {
                     </p>
                     <div className="catalog-badges-row">
                       <span className="badge-rank">{member.statusRank}</span>
-                      <span className="badge-team">{member.namaKelompok}</span>
+                      {member.groupNumber > 0 && (
+                        <span className="badge-team">{member.namaKelompok}</span>
+                      )}
                       <span className="badge-gender">{member.genderLabel}</span>
                     </div>
 

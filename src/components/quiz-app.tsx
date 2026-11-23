@@ -4,9 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getGroupName, getGroupTitle } from "@/config/event";
 import type { DataConfiguration } from "@/config/runtime";
 import {
+  calculateQuizScore,
   detectParticipantGroup,
   generateRandomQuiz,
+  getQuizChannelLabel,
+  isQuizPassed,
   QUIZ_DURATION_SECONDS,
+  QUIZ_KKM_SCORE,
+  QUIZ_ONLY_CHANNEL_IDS,
+  QUIZ_QUESTION_COUNT,
+  type QuizChannelId,
   type QuizParticipantInfo,
   type QuizQuestion,
   type QuizResult,
@@ -15,11 +22,17 @@ import { createRegistrationRepository } from "@/repositories";
 import type { Participant, RegistrationSnapshot } from "@/domain/registration";
 import { Icon } from "./icon";
 
-const QUIZ_STORAGE_KEY = "sai_bumi_enigma_quiz_active_session";
-const COMPLETED_PARTICIPANTS_KEY = "sai_bumi_enigma_quiz_completed_participants";
+function getSessionStorageKey(quizKey: QuizChannelId): string {
+  return `sai_bumi_enigma_quiz_active_session_${quizKey}`;
+}
+
+function getCompletedStorageKey(quizKey: QuizChannelId): string {
+  return `sai_bumi_enigma_quiz_completed_${quizKey}`;
+}
 
 interface PersistedQuizSession {
   version: 1;
+  quizKey?: QuizChannelId;
   participant: Participant;
   groupNumber: number;
   groupName: string;
@@ -35,12 +48,12 @@ interface StoredSessionLoad {
   remainingSeconds: number;
 }
 
-function getStoredSessionLoad(): StoredSessionLoad {
+function getStoredSessionLoad(quizKey: QuizChannelId): StoredSessionLoad {
   if (typeof window === "undefined") {
     return { session: null, isExpired: false, remainingSeconds: QUIZ_DURATION_SECONDS };
   }
   try {
-    const raw = localStorage.getItem(QUIZ_STORAGE_KEY);
+    const raw = localStorage.getItem(getSessionStorageKey(quizKey));
     if (!raw) return { session: null, isExpired: false, remainingSeconds: QUIZ_DURATION_SECONDS };
     const data = JSON.parse(raw) as PersistedQuizSession;
     if (data && data.version === 1 && Array.isArray(data.questions) && data.questions.length > 0) {
@@ -53,10 +66,10 @@ function getStoredSessionLoad(): StoredSessionLoad {
   }
 }
 
-function getCompletedParticipantIds(): string[] {
+function getCompletedParticipantIds(quizKey: QuizChannelId): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(COMPLETED_PARTICIPANTS_KEY);
+    const raw = localStorage.getItem(getCompletedStorageKey(quizKey));
     if (!raw) return [];
     const list = JSON.parse(raw);
     return Array.isArray(list) ? list : [];
@@ -65,22 +78,31 @@ function getCompletedParticipantIds(): string[] {
   }
 }
 
-function markParticipantCompleted(participantId: string) {
+function markParticipantCompleted(quizKey: QuizChannelId, participantId: string) {
   if (typeof window === "undefined") return;
   try {
-    const current = getCompletedParticipantIds();
+    const current = getCompletedParticipantIds(quizKey);
     if (!current.includes(participantId)) {
       current.push(participantId);
-      localStorage.setItem(COMPLETED_PARTICIPANTS_KEY, JSON.stringify(current));
+      localStorage.setItem(getCompletedStorageKey(quizKey), JSON.stringify(current));
     }
   } catch {
     // ignore
   }
 }
 
-export function QuizApp({ configuration }: { configuration: DataConfiguration }) {
+export function QuizApp({
+  configuration,
+  mode = "pretest",
+}: {
+  configuration: DataConfiguration;
+  mode?: "pretest" | "quiz";
+}) {
+  const defaultQuizKey: QuizChannelId = mode === "quiz" ? "quiz-1" : "pretest";
+  const [activeQuizKey, setActiveQuizKey] = useState<QuizChannelId>(defaultQuizKey);
+
   // Check persisted session once via lazy state initializer
-  const [initialLoad] = useState<StoredSessionLoad>(getStoredSessionLoad);
+  const [initialLoad] = useState<StoredSessionLoad>(() => getStoredSessionLoad(defaultQuizKey));
   const initialSession = initialLoad.session;
   const isInitiallyExpired = initialLoad.isExpired;
 
@@ -105,8 +127,10 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Completed participants tracking
-  const [completedIds, setCompletedIds] = useState<string[]>(getCompletedParticipantIds);
+  // Completed participants tracking per quizKey
+  const [completedIds, setCompletedIds] = useState<string[]>(() =>
+    getCompletedParticipantIds(defaultQuizKey)
+  );
 
   // Quiz active state
   const [questions, setQuestions] = useState<QuizQuestion[]>(
@@ -145,7 +169,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
           groupNumber: initialSession.groupNumber,
           groupName: getGroupTitle(initialSession.groupNumber),
         },
-        score: total > 0 ? Math.round((correct / total) * 100) : 0,
+        score: calculateQuizScore(correct, total),
         totalQuestions: total,
         correctCount: correct,
         wrongCount: total - correct,
@@ -162,12 +186,14 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
   useEffect(() => {
     if (initialSession && isInitiallyExpired && typeof window !== "undefined") {
       try {
-        localStorage.removeItem(QUIZ_STORAGE_KEY);
-        markParticipantCompleted(initialSession.participant.id);
+        const keyToClear = initialSession.quizKey || defaultQuizKey;
+        localStorage.removeItem(getSessionStorageKey(keyToClear));
+        markParticipantCompleted(keyToClear, initialSession.participant.id);
         void fetch("/api/quiz/submit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            quizKey: keyToClear,
             participant: initialSession.participant,
             groupNumber: initialSession.groupNumber,
             questions: initialSession.questions,
@@ -209,10 +235,33 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
     let active = true;
     async function checkStatus() {
       try {
-        const res = await fetch("/api/quiz/status");
+        const res = await fetch("/api/quiz/status", { cache: "no-store" });
         if (res.ok && active) {
           const data = await res.json();
-          setIsQuizOpen(Boolean(data.isOpen));
+          const channels: Record<QuizChannelId, boolean> = {
+            pretest: Boolean(data.channels?.pretest ?? data.isOpen),
+            "quiz-1": Boolean(data.channels?.["quiz-1"]),
+            "quiz-2": Boolean(data.channels?.["quiz-2"]),
+            "quiz-3": Boolean(data.channels?.["quiz-3"]),
+            "quiz-4": Boolean(data.channels?.["quiz-4"]),
+          };
+
+          if (mode === "quiz") {
+            // Otomatis ikuti 1 quiz (Quiz 1 - 4) yang sedang diaktifkan oleh Admin
+            const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? null;
+            if (openQuizId) {
+              setActiveQuizKey(openQuizId);
+              setCompletedIds(getCompletedParticipantIds(openQuizId));
+              setIsQuizOpen(true);
+            } else {
+              setIsQuizOpen(false);
+            }
+          } else {
+            setActiveQuizKey("pretest");
+            setCompletedIds(getCompletedParticipantIds("pretest"));
+            setIsQuizOpen(channels.pretest);
+          }
+
           setCheckingQuizStatus(false);
         }
       } catch {
@@ -227,7 +276,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
       active = false;
       clearInterval(interval);
     };
-  }, [stage]);
+  }, [stage, mode]);
 
   // Handle outside click for participant dropdown
   useEffect(() => {
@@ -268,7 +317,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
       });
 
       const totalQuestions = questions.length;
-      const score = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+      const score = calculateQuizScore(correctCount, totalQuestions);
       const timeSpentSeconds = QUIZ_DURATION_SECONDS - timeLeft;
 
       setQuizResult({
@@ -287,14 +336,14 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
         setIsTimeUp(true);
       }
 
-      // Mark participant as permanently completed so they cannot retake
-      markParticipantCompleted(selectedParticipant.id);
-      setCompletedIds(getCompletedParticipantIds());
+      // Mark participant as permanently completed for this quiz channel so they cannot retake
+      markParticipantCompleted(activeQuizKey, selectedParticipant.id);
+      setCompletedIds(getCompletedParticipantIds(activeQuizKey));
 
       // Clear persisted active session
       if (typeof window !== "undefined") {
         try {
-          localStorage.removeItem(QUIZ_STORAGE_KEY);
+          localStorage.removeItem(getSessionStorageKey(activeQuizKey));
         } catch {
           // ignore
         }
@@ -306,6 +355,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            quizKey: activeQuizKey,
             participant: selectedParticipant,
             groupNumber: selectedGroupNumber,
             questions,
@@ -452,7 +502,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
     if (!selectedParticipant || selectedGroupNumber === null) return;
     if (completedIds.includes(selectedParticipant.id)) return;
 
-    const randomQuestions = generateRandomQuiz(10);
+    const randomQuestions = generateRandomQuiz(QUIZ_QUESTION_COUNT, activeQuizKey);
     const deadlineAt = Date.now() + QUIZ_DURATION_SECONDS * 1000;
 
     setQuestions(randomQuestions);
@@ -467,6 +517,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
       try {
         const session: PersistedQuizSession = {
           version: 1,
+          quizKey: activeQuizKey,
           participant: selectedParticipant,
           groupNumber: selectedGroupNumber,
           groupName: getGroupName(selectedGroupNumber),
@@ -475,7 +526,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
           answers: {},
           deadlineAt,
         };
-        localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(session));
+        localStorage.setItem(getSessionStorageKey(activeQuizKey), JSON.stringify(session));
       } catch {
         // ignore
       }
@@ -495,11 +546,11 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
       // Persist answer change
       if (typeof window !== "undefined" && selectedParticipant && selectedGroupNumber !== null) {
         try {
-          const raw = localStorage.getItem(QUIZ_STORAGE_KEY);
+          const raw = localStorage.getItem(getSessionStorageKey(activeQuizKey));
           if (raw) {
             const session = JSON.parse(raw) as PersistedQuizSession;
             session.answers = updated;
-            localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(session));
+            localStorage.setItem(getSessionStorageKey(activeQuizKey), JSON.stringify(session));
           }
         } catch {
           // ignore
@@ -521,11 +572,11 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
     // Persist question index update
     if (typeof window !== "undefined") {
       try {
-        const raw = localStorage.getItem(QUIZ_STORAGE_KEY);
+        const raw = localStorage.getItem(getSessionStorageKey(activeQuizKey));
         if (raw) {
           const session = JSON.parse(raw) as PersistedQuizSession;
           session.currentIndex = nextIndex;
-          localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(session));
+          localStorage.setItem(getSessionStorageKey(activeQuizKey), JSON.stringify(session));
         }
       } catch {
         // ignore
@@ -562,13 +613,22 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
       <section className="quiz-panel panel" aria-labelledby="quiz-setup-heading">
         <div className="section-kicker">
           <Icon name="compass" />
-          <span>MISI INVESTIGASI THE SAI BUMI ENIGMA</span>
+          <span>
+            {mode === "quiz" && !isQuizOpen
+              ? "QUIZ INVESTIGASI · MENUNGGU AKTIVASI ADMIN"
+              : `${getQuizChannelLabel(activeQuizKey).toUpperCase()} · THE SAI BUMI ENIGMA`}
+          </span>
         </div>
         <h2 id="quiz-setup-heading" className="quiz-title">
-          Uji Ketajaman Detektif Anda
+          {mode === "quiz"
+            ? isQuizOpen
+              ? getQuizChannelLabel(activeQuizKey)
+              : "Quiz Belum Diaktifkan Admin"
+            : "Pretest Investigasi Detektif"}
         </h2>
+
         <p className="quiz-desc">
-          Tantangan investigasi <strong>5 menit</strong> untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
+          Tantangan investigasi <strong>15 soal · 10 menit</strong> (KKM: <strong>{QUIZ_KKM_SCORE}</strong>) untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
           Kelompok terdeteksi otomatis saat memilih nama peserta. Soal diselesaikan secara berurutan satu per satu.
         </p>
 
@@ -578,7 +638,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
               <Icon name="clock" size={22} />
             </span>
             <div>
-              <strong>Durasi 5 Menit</strong>
+              <strong>Durasi 10 Menit</strong>
               <p>Jika browser ditutup atau halaman keluar, kuis tetap tersimpan dan melanjutkan waktu yang tersisa.</p>
             </div>
           </div>
@@ -778,7 +838,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
               <Icon name={!isQuizOpen ? "lock" : "arrow"} size={20} />
             </button>
             <p className="start-disclaimer">
-              Setelah dimulai, kuis akan berjalan selama 5 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan kuis secara otomatis.
+              Setelah dimulai, kuis (15 soal · KKM {QUIZ_KKM_SCORE}) akan berjalan selama 10 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan kuis secara otomatis.
             </p>
           </div>
         </form>
@@ -1071,7 +1131,7 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
               <Icon name="award" size={32} />
             </span>
             <span className="eyebrow">
-              {isTimeUp ? "WAKTU 5 MENIT SELESAI" : "INVESTIGASI SELESAI"}
+              {isTimeUp ? "WAKTU 10 MENIT SELESAI" : "INVESTIGASI SELESAI"}
             </span>
           </div>
 
@@ -1109,82 +1169,16 @@ export function QuizApp({ configuration }: { configuration: DataConfiguration })
                 </strong>
               </div>
               <div className="detail-stat">
-                <span className="stat-label">Predikat</span>
-                <strong className="stat-value text-gold">
-                  {quizResult.score >= 90
-                    ? "Detektif Master"
-                    : quizResult.score >= 70
-                    ? "Investigator Handal"
-                    : "Detektif Magang"}
+                <span className="stat-label">Status KKM ({QUIZ_KKM_SCORE})</span>
+                <strong
+                  className={`stat-value ${
+                    isQuizPassed(quizResult.score) ? "text-success" : "text-danger"
+                  }`}
+                >
+                  {isQuizPassed(quizResult.score) ? "✓ LULUS" : "✕ TIDAK LULUS"}
                 </strong>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* REVIEW & PEMBAHASAN */}
-        <div className="review-section">
-          <div className="review-heading">
-            <Icon name="compass" size={20} />
-            <h3>Pembahasan & Kunci Jawaban</h3>
-          </div>
-          <p className="review-desc">
-            Evaluasi jawaban Anda untuk mendalami petunjuk dan teka-teki The Sai Bumi Enigma.
-          </p>
-
-          <div className="review-questions-list">
-            {quizResult.questions.map((q, idx) => {
-              const selectedOptId = quizResult.answers[q.id];
-              const isCorrect = selectedOptId === q.correctOptionId;
-              const selectedOpt = q.options.find((o) => o.id === selectedOptId);
-              const correctOpt = q.options.find((o) => o.id === q.correctOptionId);
-
-              return (
-                <div
-                  key={q.id}
-                  className={`review-question-card ${isCorrect ? "is-correct" : "is-wrong"}`}
-                >
-                  <div className="review-card-top">
-                    <span className="review-question-num">Soal {idx + 1}</span>
-                    <span className={`review-status-pill ${isCorrect ? "pill-correct" : "pill-wrong"}`}>
-                      {isCorrect ? (
-                        <>
-                          <Icon name="check" size={14} /> Benar
-                        </>
-                      ) : (
-                        <>
-                          <Icon name="close" size={14} /> {selectedOptId ? "Salah" : "Tidak Dijawab"}
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  <h4 className="review-question-text">{q.question}</h4>
-
-                  <div className="review-answers-box">
-                    <div className="answer-row">
-                      <span className="answer-row-label">Jawaban Anda:</span>
-                      <span className={`answer-row-val ${isCorrect ? "text-success" : "text-danger"}`}>
-                        {selectedOpt ? selectedOpt.text : "— Tidak memilih jawaban —"}
-                      </span>
-                    </div>
-
-                    {!isCorrect && (
-                      <div className="answer-row">
-                        <span className="answer-row-label">Jawaban Benar:</span>
-                        <span className="answer-row-val text-success">
-                          {correctOpt ? correctOpt.text : "—"}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="review-explanation">
-                      <strong>Penjelasan:</strong> {q.explanation}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       </section>

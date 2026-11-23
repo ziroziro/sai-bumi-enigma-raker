@@ -6,7 +6,9 @@ import {
   getStageGroupName,
   normalizeGoogleSpreadsheetCsvUrl,
   parseStageScoresSpreadsheetCsv,
+  STATIC_STAGE_SPREADSHEET_URL,
   TOTAL_STAGE_COUNT,
+  type LeaderboardDisplayMode,
   type StageEssayStateSnapshot,
   type StageEssaySubmission,
   type StageScoreEntry,
@@ -16,13 +18,18 @@ interface PersistedStageEssayData {
   isFormOpen: boolean;
   isLeaderboardRevealed: boolean;
   leaderboardRevealId: number;
+  leaderboardMode: LeaderboardDisplayMode;
   activeStageNumber: number;
+  displayAnswersStageNumber: number;
+  leaderboardStageNumber: number;
   completedStageNumbers: number[];
   spreadsheetUrl: string;
   lastSpreadsheetSyncAt: string | null;
   lastSpreadsheetSyncError: string | null;
   submissions: StageEssaySubmission[];
   scores: StageScoreEntry[];
+  bestGroupScores: Record<number, number>;
+  syncedRowStageMap: Record<string, number>;
 }
 
 const STAGE_ESSAY_DATA_FILE = join(process.cwd(), ".stage-essay-data.json");
@@ -69,23 +76,49 @@ if (!globalStore.__sai_bumi_stage_essay_state) {
       typeof disk?.isLeaderboardRevealed === "boolean" ? disk.isLeaderboardRevealed : false,
     leaderboardRevealId:
       typeof disk?.leaderboardRevealId === "number" ? disk.leaderboardRevealId : 0,
+    leaderboardMode: disk?.leaderboardMode === "best_group" ? "best_group" : "session",
     activeStageNumber:
       typeof disk?.activeStageNumber === "number" &&
       disk.activeStageNumber >= 1 &&
       disk.activeStageNumber <= TOTAL_STAGE_COUNT
         ? disk.activeStageNumber
         : 1,
+    displayAnswersStageNumber:
+      typeof disk?.displayAnswersStageNumber === "number" &&
+      disk.displayAnswersStageNumber >= 1 &&
+      disk.displayAnswersStageNumber <= TOTAL_STAGE_COUNT
+        ? disk.displayAnswersStageNumber
+        : typeof disk?.activeStageNumber === "number" &&
+          disk.activeStageNumber >= 1 &&
+          disk.activeStageNumber <= TOTAL_STAGE_COUNT
+        ? disk.activeStageNumber
+        : 1,
+    leaderboardStageNumber:
+      typeof disk?.leaderboardStageNumber === "number" &&
+      disk.leaderboardStageNumber >= 1 &&
+      disk.leaderboardStageNumber <= TOTAL_STAGE_COUNT
+        ? disk.leaderboardStageNumber
+        : typeof disk?.activeStageNumber === "number" &&
+          disk.activeStageNumber >= 1 &&
+          disk.activeStageNumber <= TOTAL_STAGE_COUNT
+        ? disk.activeStageNumber
+        : 1,
     completedStageNumbers: Array.isArray(disk?.completedStageNumbers)
       ? disk.completedStageNumbers
       : [],
-    spreadsheetUrl:
-      typeof disk?.spreadsheetUrl === "string"
-        ? disk.spreadsheetUrl
-        : process.env.STAGE_SPREADSHEET_URL || "",
+    spreadsheetUrl: STATIC_STAGE_SPREADSHEET_URL,
     lastSpreadsheetSyncAt: disk?.lastSpreadsheetSyncAt ?? null,
     lastSpreadsheetSyncError: disk?.lastSpreadsheetSyncError ?? null,
     submissions: Array.isArray(disk?.submissions) ? disk.submissions : [],
     scores: Array.isArray(disk?.scores) ? disk.scores : [],
+    bestGroupScores:
+      disk?.bestGroupScores && typeof disk.bestGroupScores === "object"
+        ? disk.bestGroupScores
+        : {},
+    syncedRowStageMap:
+      disk?.syncedRowStageMap && typeof disk.syncedRowStageMap === "object"
+        ? disk.syncedRowStageMap
+        : {},
   };
 }
 
@@ -116,6 +149,7 @@ export function submitGroupStageEssay(input: {
   stageNumber?: number;
   groupNumber: number;
   detail: string;
+  photoDataUrl?: string | null;
 }): { submission: StageEssaySubmission; snapshot: StageEssayStateSnapshot } {
   const state = getState();
   if (!state.isFormOpen) {
@@ -127,7 +161,7 @@ export function submitGroupStageEssay(input: {
   }
 
   const stageNumber = state.activeStageNumber;
-  const { groupNumber, detail } = input;
+  const { groupNumber, detail, photoDataUrl } = input;
 
   if (groupNumber < 1 || groupNumber > 4) {
     throw new StageEssayError("INVALID_GROUP", "Pilihan kelompok tidak valid.", 400);
@@ -150,6 +184,7 @@ export function submitGroupStageEssay(input: {
     groupNumber,
     groupName: getStageGroupName(groupNumber),
     detail: detail.trim(),
+    photoDataUrl: photoDataUrl && photoDataUrl.startsWith("data:image/") ? photoDataUrl : null,
     submittedAt: new Date().toISOString(),
   };
 
@@ -190,6 +225,53 @@ export function setActiveStageNumber(stageNumber: number): StageEssayStateSnapsh
   }
   const state = getState();
   state.activeStageNumber = stageNumber;
+  state.leaderboardStageNumber = stageNumber;
+  persist();
+  return getStageEssaySnapshot();
+}
+
+export function setLeaderboardStageNumber(stageNumber: number): StageEssayStateSnapshot {
+  if (stageNumber < 1 || stageNumber > TOTAL_STAGE_COUNT) {
+    throw new StageEssayError("INVALID_STAGE", "Sesi harus antara 1 sampai 10.", 400);
+  }
+  const state = getState();
+  state.leaderboardStageNumber = stageNumber;
+  state.leaderboardMode = "session";
+  persist();
+  return getStageEssaySnapshot();
+}
+
+export function setLeaderboardDisplayMode(
+  mode: LeaderboardDisplayMode
+): StageEssayStateSnapshot {
+  const state = getState();
+  state.leaderboardMode = mode === "best_group" ? "best_group" : "session";
+  persist();
+  return getStageEssaySnapshot();
+}
+
+export function saveBestGroupScores(
+  scores: Record<number, number>
+): StageEssayStateSnapshot {
+  const state = getState();
+  const next: Record<number, number> = { ...(state.bestGroupScores || {}) };
+  for (const grpNum of [1, 2, 3, 4]) {
+    const val = scores[grpNum];
+    if (typeof val === "number" && Number.isFinite(val)) {
+      next[grpNum] = Math.round(val * 100) / 100;
+    }
+  }
+  state.bestGroupScores = next;
+  persist();
+  return getStageEssaySnapshot();
+}
+
+export function setDisplayAnswersStageNumber(stageNumber: number): StageEssayStateSnapshot {
+  if (stageNumber < 1 || stageNumber > TOTAL_STAGE_COUNT) {
+    throw new StageEssayError("INVALID_STAGE", "Sesi harus antara 1 sampai 10.", 400);
+  }
+  const state = getState();
+  state.displayAnswersStageNumber = stageNumber;
   persist();
   return getStageEssaySnapshot();
 }
@@ -240,7 +322,12 @@ export function upsertStageScores(newScores: StageScoreEntry[]): StageEssayState
 }
 
 export function importStageScoresFromCsvText(csvText: string): StageEssayStateSnapshot {
-  const parsed = parseStageScoresSpreadsheetCsv(csvText);
+  const state = getState();
+  if (!state.syncedRowStageMap) state.syncedRowStageMap = {};
+  const parsed = parseStageScoresSpreadsheetCsv(csvText, {
+    activeStageNumber: state.activeStageNumber,
+    rowStageMap: state.syncedRowStageMap,
+  });
   if (parsed.length === 0) {
     throw new StageEssayError(
       "EMPTY_CSV_SCORES",
@@ -248,30 +335,18 @@ export function importStageScoresFromCsvText(csvText: string): StageEssayStateSn
       400
     );
   }
-  const state = getState();
   state.lastSpreadsheetSyncAt = new Date().toISOString();
   state.lastSpreadsheetSyncError = null;
   return upsertStageScores(parsed);
 }
 
 export async function syncStageScoresFromGoogleSpreadsheet(
-  customUrl?: string
+  _customUrl?: string
 ): Promise<StageEssayStateSnapshot> {
   const state = getState();
-  if (typeof customUrl === "string") {
-    state.spreadsheetUrl = customUrl.trim();
-  }
-
-  const targetUrl = state.spreadsheetUrl.trim();
-  if (!targetUrl) {
-    throw new StageEssayError(
-      "MISSING_SPREADSHEET_URL",
-      "Silakan masukkan link Google Spreadsheet penilaian terlebih dahulu.",
-      400
-    );
-  }
-
-  const csvExportUrl = normalizeGoogleSpreadsheetCsvUrl(targetUrl);
+  state.spreadsheetUrl = STATIC_STAGE_SPREADSHEET_URL;
+  if (!state.syncedRowStageMap) state.syncedRowStageMap = {};
+  const csvExportUrl = normalizeGoogleSpreadsheetCsvUrl(STATIC_STAGE_SPREADSHEET_URL);
 
   try {
     const response = await fetch(csvExportUrl, {
@@ -283,28 +358,31 @@ export async function syncStageScoresFromGoogleSpreadsheet(
 
     if (!response.ok) {
       throw new Error(
-        `Gagal membaca Google Spreadsheet (HTTP ${response.status}). Pastikan akses spreadsheet disetel ke "Anyone with the link can view" atau "Publish to web (CSV)".`
+        `Gagal membaca Google Spreadsheet (HTTP ${response.status}). Pastikan akses spreadsheet disetel ke "Anyone with the link can view".`
       );
     }
 
     const csvText = await response.text();
     if (csvText.trim().startsWith("<!DOCTYPE html") || csvText.trim().startsWith("<html")) {
       throw new Error(
-        'Spreadsheet masih terkunci (Private). Ubah akses Share Google Sheets menjadi "Anyone with the link (Viewer)" atau klik File > Share > Publish to web (CSV).'
+        'Spreadsheet masih terkunci (Private). Ubah akses Share Google Sheets menjadi "Anyone with the link (Viewer)".'
       );
     }
 
-    const parsedScores = parseStageScoresSpreadsheetCsv(csvText);
+    const parsedScores = parseStageScoresSpreadsheetCsv(csvText, {
+      activeStageNumber: state.activeStageNumber,
+      rowStageMap: state.syncedRowStageMap,
+    });
     if (parsedScores.length === 0) {
       throw new Error(
-        "Spreadsheet berhasil dibuka, namun belum ditemukan baris nilai untuk sesi 1-10 dan 4 kelompok."
+        "Spreadsheet berhasil dibuka, namun belum ditemukan baris penilaian yang valid."
       );
     }
 
     state.lastSpreadsheetSyncAt = new Date().toISOString();
     state.lastSpreadsheetSyncError = null;
-    upsertStageScores(parsedScores);
-    return getStageEssaySnapshot();
+    // Akumulasi antar sesi: nilai sesi sebelumnya tetap tersimpan, baris baru masuk ke Sesi Aktif
+    return upsertStageScores(parsedScores);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Gagal melakukan sinkronisasi dengan Google Spreadsheet.";

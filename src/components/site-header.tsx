@@ -5,11 +5,18 @@ import { Icon } from "./icon";
 export function SiteHeader({
   activeNav,
 }: {
-  activeNav?: "quiz" | "pendaftaran" | "absensi" | "chief-detective" | "stage" | "leaderboard";
+  activeNav?:
+    | "pretest"
+    | "quiz"
+    | "pendaftaran"
+    | "absensi"
+    | "chief-detective"
+    | "stage"
+    | "leaderboard";
 }) {
   return (
     <header className="site-header">
-      <Link href="/quiz" className="brand" aria-label={`${event.name}, menu utama`}>
+      <Link href="/pretest" className="brand" aria-label={`${event.name}, menu utama`}>
         <span className="brand-mark" aria-hidden="true">
           <Icon name="compass" size={25} />
         </span>
@@ -19,16 +26,16 @@ export function SiteHeader({
       </Link>
       <nav aria-label="Navigasi utama" className="header-nav">
         <Link
-          href="/absensi"
-          className={`nav-link ${activeNav === "absensi" ? "is-active" : ""}`}
+          href="/pretest"
+          className={`nav-link ${activeNav === "pretest" ? "is-active" : ""}`}
         >
-          Absensi Agent
+          Pretest
         </Link>
         <Link
           href="/quiz"
           className={`nav-link ${activeNav === "quiz" ? "is-active" : ""}`}
         >
-          Quiz Investigasi
+          Quiz
         </Link>
         <Link
           href="/stage"
