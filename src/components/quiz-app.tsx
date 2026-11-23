@@ -24,11 +24,11 @@ import type { Participant, RegistrationSnapshot } from "@/domain/registration";
 import { Icon } from "./icon";
 
 function getSessionStorageKey(quizKey: QuizChannelId): string {
-  return `sai_bumi_enigma_quiz_active_session_${quizKey}`;
+  return `sai_bumi_enigma_quiz_active_session_v2_${quizKey}`;
 }
 
 function getCompletedStorageKey(quizKey: QuizChannelId): string {
-  return `sai_bumi_enigma_quiz_completed_${quizKey}`;
+  return `sai_bumi_enigma_quiz_completed_v2_${quizKey}`;
 }
 
 interface PersistedQuizSession {
@@ -258,14 +258,33 @@ export function QuizApp({
             "quiz-4": Boolean(data.channels?.["quiz-4"]),
           };
 
+          const serverCompleted = data.completedByChannel as
+            | Partial<Record<QuizChannelId, string[]>>
+            | undefined;
+
+          const syncCompletedForChannel = (ch: QuizChannelId) => {
+            if (serverCompleted && Array.isArray(serverCompleted[ch])) {
+              const serverIds = serverCompleted[ch]!;
+              setCompletedIds(serverIds);
+              try {
+                localStorage.setItem(getCompletedStorageKey(ch), JSON.stringify(serverIds));
+              } catch {
+                // ignore
+              }
+            } else {
+              setCompletedIds(getCompletedParticipantIds(ch));
+            }
+          };
+
           if (mode === "all") {
             // Otomatis ikuti 1 Mission (Mission 1 - 5) yang sedang diaktifkan oleh Admin
             const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? null;
             if (openMissionId) {
               setActiveQuizKey(openMissionId);
-              setCompletedIds(getCompletedParticipantIds(openMissionId));
+              syncCompletedForChannel(openMissionId);
               setIsQuizOpen(true);
             } else {
+              syncCompletedForChannel(activeQuizKey);
               setIsQuizOpen(false);
             }
           } else if (mode === "quiz") {
@@ -273,14 +292,15 @@ export function QuizApp({
             const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? null;
             if (openQuizId) {
               setActiveQuizKey(openQuizId);
-              setCompletedIds(getCompletedParticipantIds(openQuizId));
+              syncCompletedForChannel(openQuizId);
               setIsQuizOpen(true);
             } else {
+              syncCompletedForChannel(activeQuizKey);
               setIsQuizOpen(false);
             }
           } else {
             setActiveQuizKey("pretest");
-            setCompletedIds(getCompletedParticipantIds("pretest"));
+            syncCompletedForChannel("pretest");
             setIsQuizOpen(channels.pretest);
           }
 

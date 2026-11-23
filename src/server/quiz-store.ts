@@ -154,10 +154,14 @@ export function recordLocalQuizSubmission(record: QuizSubmissionRecord) {
 }
 
 export function replaceLocalQuizSubmissions(records: QuizSubmissionRecord[]) {
-  globalStore.__sai_bumi_quiz_submissions = records.map((r) => ({
+  const existingNonPretest = (globalStore.__sai_bumi_quiz_submissions || []).filter(
+    (s) => (s.quizKey || "pretest") !== "pretest"
+  );
+  const incoming = records.map((r) => ({
     ...r,
     quizKey: r.quizKey || "pretest",
   }));
+  globalStore.__sai_bumi_quiz_submissions = [...incoming, ...existingNonPretest];
   persistLocalState();
 }
 

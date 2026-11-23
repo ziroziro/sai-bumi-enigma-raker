@@ -303,7 +303,7 @@ export async function getQuizSubmissionsList(): Promise<QuizSubmissionRecord[]> 
       });
 
     replaceLocalQuizSubmissions(normalized);
-    return normalized;
+    return getLocalQuizSubmissions();
   } catch {
     return getLocalQuizSubmissions();
   }
