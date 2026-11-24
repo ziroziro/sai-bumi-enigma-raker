@@ -20,7 +20,7 @@ export interface QuizSystemStatus {
   updatedAt: string;
 }
 
-function createDefaultChannels(pretestOpen = false): Record<QuizChannelId, boolean> {
+function createDefaultChannels(pretestOpen = true): Record<QuizChannelId, boolean> {
   return {
     pretest: pretestOpen,
     "quiz-1": false,
@@ -31,7 +31,7 @@ function createDefaultChannels(pretestOpen = false): Record<QuizChannelId, boole
 }
 
 function normalizeQuizStatus(raw?: Partial<QuizSystemStatus> | null): QuizSystemStatus {
-  const baseOpen = Boolean(raw?.isOpen);
+  const baseOpen = typeof raw?.isOpen === "boolean" ? raw.isOpen : true;
   const rawChannels = raw?.channels;
   const channels: Record<QuizChannelId, boolean> = {
     pretest: typeof rawChannels?.pretest === "boolean" ? rawChannels.pretest : baseOpen,
@@ -40,6 +40,11 @@ function normalizeQuizStatus(raw?: Partial<QuizSystemStatus> | null): QuizSystem
     "quiz-3": Boolean(rawChannels?.["quiz-3"]),
     "quiz-4": Boolean(rawChannels?.["quiz-4"]),
   };
+  // Pastikan selalu ada minimal 1 Mission yang terbuka (default Mission 1) agar tidak pernah ketutup setelah restart
+  const anyOpen = Object.values(channels).some(Boolean);
+  if (!anyOpen) {
+    channels.pretest = true;
+  }
   return {
     isOpen: channels.pretest,
     channels,

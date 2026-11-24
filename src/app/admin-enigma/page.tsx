@@ -101,7 +101,7 @@ export default function AdminPage() {
   // Master quiz status control per channel (Pretest + Quiz 1..4)
   const [selectedQuizChannel, setSelectedQuizChannel] = useState<QuizChannelId>("pretest");
   const [quizChannelStatuses, setQuizChannelStatuses] = useState<Record<QuizChannelId, boolean>>({
-    pretest: false,
+    pretest: true,
     "quiz-1": false,
     "quiz-2": false,
     "quiz-3": false,
