@@ -246,11 +246,11 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
         p_event_slug: config.eventSlug,
         p_participant_id: participant.id,
         p_group_number: groupNumber,
-        p_score: score,
+        p_score: Math.round(score),
         p_total_questions: totalQuestions,
         p_correct_count: correctCount,
         p_wrong_count: totalQuestions - correctCount,
-        p_time_spent_seconds: timeSpentSeconds,
+        p_time_spent_seconds: Math.round(timeSpentSeconds),
         p_answers: answers,
       });
     } catch {
@@ -294,6 +294,7 @@ export async function getQuizSubmissionsList(): Promise<QuizSubmissionRecord[]> 
     const normalized: QuizSubmissionRecord[] = dbSubmissions
       .map((s) => ({
         ...s,
+        score: calculateQuizScore(s.correctCount, s.totalQuestions),
         groupName: getGroupTitle(s.groupNumber),
       }))
       .sort((a, b) => {

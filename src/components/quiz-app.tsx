@@ -161,7 +161,6 @@ export function QuizApp({
     () => Boolean(initialSession && !isInitiallyExpired)
   );
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
-  const [isDevToolsOpen, setIsDevToolsOpen] = useState(false);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [checkingQuizStatus, setCheckingQuizStatus] = useState(true);
 
@@ -413,29 +412,35 @@ export function QuizApp({
         }
       }
 
-      // Submit result to database / server API in background
-      try {
-        void fetch("/api/quiz/submit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quizKey: activeQuizKey,
-            participant: selectedParticipant,
-            groupNumber: selectedGroupNumber,
-            questions,
-            answers,
-            timeSpentSeconds: Math.max(0, timeSpentSeconds),
-          }),
-        }).catch((err) => {
-          console.error("Gagal menyimpan hasil kuis ke server:", err);
-        });
-      } catch {
-        // ignore
-      }
+      // Submit result to database / server API with automatic retry
+      const submitBody = JSON.stringify({
+        quizKey: activeQuizKey,
+        participant: selectedParticipant,
+        groupNumber: selectedGroupNumber,
+        questions,
+        answers,
+        timeSpentSeconds: Math.max(0, timeSpentSeconds),
+      });
+      void (async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const res = await fetch("/api/quiz/submit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: submitBody,
+              keepalive: true,
+            });
+            if (res.ok) return;
+          } catch {
+            // retry on transient network error
+          }
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      })();
 
       setStage("result");
     },
-    [selectedParticipant, selectedGroupNumber, questions, answers, timeLeft]
+    [activeQuizKey, selectedParticipant, selectedGroupNumber, questions, answers, timeLeft]
   );
 
   // Countdown timer effect during quiz
@@ -456,28 +461,15 @@ export function QuizApp({
     return () => clearInterval(timer);
   }, [stage, finishQuiz]);
 
-  // Anti-Inspect, DevTools Detection & Anti-Screenshot protection
+  // Anti-Copy, Shortcut & Window Blur protection (tanpa deteksi ukuran layar DevTools agar tidak false-positive di HP/zoom browser)
   useEffect(() => {
     if (stage !== "in_progress") return;
-
-    // DevTools detection via window size delta threshold
-    function detectDevTools() {
-      const threshold = 160;
-      const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-      const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-      if (widthThreshold || heightThreshold) {
-        setIsDevToolsOpen(true);
-      } else {
-        setIsDevToolsOpen(false);
-      }
-    }
 
     // Keyboard shortcut interception for Inspect, View Source, Save, Print
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "F12" || e.keyCode === 123) {
         e.preventDefault();
         e.stopPropagation();
-        setIsDevToolsOpen(true);
         return false;
       }
 
@@ -488,7 +480,6 @@ export function QuizApp({
         if (e.shiftKey && ["i", "j", "c"].includes(key)) {
           e.preventDefault();
           e.stopPropagation();
-          setIsDevToolsOpen(true);
           return false;
         }
         // Ctrl+U (view source), Ctrl+S (save page), Ctrl+P (print), Ctrl+C (copy)
@@ -523,25 +514,18 @@ export function QuizApp({
       }
     }
 
-    window.addEventListener("resize", detectDevTools);
     window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("contextmenu", handleContextMenu, true);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
     window.addEventListener("keyup", handleKeyUp);
 
-    // Initial check
-    detectDevTools();
-    const interval = setInterval(detectDevTools, 1500);
-
     return () => {
-      window.removeEventListener("resize", detectDevTools);
       window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("contextmenu", handleContextMenu, true);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("keyup", handleKeyUp);
-      clearInterval(interval);
     };
   }, [stage]);
 
@@ -959,38 +943,8 @@ export function QuizApp({
         onDragStart={(e) => e.preventDefault()}
         tabIndex={0}
       >
-        {/* DEVTOOLS & INSPECTION SHIELD OVERLAY */}
-        {isDevToolsOpen && (
-          <div className="anti-inspect-shield-overlay" role="dialog" aria-modal="true">
-            <div className="shield-modal shield-warning">
-              <span className="shield-icon-badge warning-badge">
-                <Icon name="shield" size={40} />
-              </span>
-              <h3>Inspeksi Elemen / DevTools Terdeteksi</h3>
-              <p>
-                Sistem mendeteksi aktivitas Developer Tools / Inspeksi Halaman.
-                Untuk menjaga kejujuran kuis, silakan tutup DevTools atau jendela inspeksi untuk dapat melanjutkan kuis investigasi.
-              </p>
-              <button
-                type="button"
-                className="btn-primary-link btn-resume-shield"
-                onClick={() => {
-                  const widthThreshold = window.outerWidth - window.innerWidth > 160;
-                  const heightThreshold = window.outerHeight - window.innerHeight > 160;
-                  if (!widthThreshold && !heightThreshold) {
-                    setIsDevToolsOpen(false);
-                  }
-                }}
-              >
-                <span>Sudah Tutup DevTools (Lanjutkan)</span>
-                <Icon name="arrow" size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* SCREENSHOT & WINDOW BLUR SHIELD OVERLAY */}
-        {isWindowBlurred && !isDevToolsOpen && (
+        {isWindowBlurred && (
           <div className="screenshot-shield-overlay" role="dialog" aria-modal="true">
             <div className="shield-modal">
               <span className="shield-icon-badge">
