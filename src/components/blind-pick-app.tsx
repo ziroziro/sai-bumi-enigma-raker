@@ -389,15 +389,15 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
         <div className="blind-pick-header">
           <p className="eyebrow">
             {isBlack
-              ? "BLACK DOSSIER · KARTU PERLINDUNGAN & PENYELAMATAN"
+              ? "WHITE DOSSIER · KARTU PERLINDUNGAN & PENYELAMATAN"
               : "BLIND PICK · KARTU KEKUATAN RAHASIA"}
           </p>
           <h1 className="blind-pick-title">
-            {isBlack ? "PILIH AMPLOP HITAM" : "PILIH BERKAS MISTERI"}
+            {isBlack ? "PILIH AMPLOP PUTIH" : "PILIH BERKAS MISTERI"}
           </h1>
           <p className="blind-pick-subtitle">
             {isBlack
-              ? "Pilih salah satu amplop hitam tersegel untuk mengungkap kartu Shield atau Penyelamatan dari Penjara."
+              ? "Pilih salah satu amplop putih tersegel untuk mengungkap kartu rahasia di dalamnya."
               : "Pilih salah satu berkas tersegel untuk membalik, membuka segel lilin, dan mengungkap kartu kekuatan rahasia di dalamnya."}
           </p>
 
@@ -458,9 +458,9 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
                           x2="0%"
                           y2="100%"
                         >
-                          <stop offset="0%" stopColor={isBlack ? "#2d2d32" : "#e3c8a2"} />
-                          <stop offset="68%" stopColor={isBlack ? "#1a1a1f" : "#c9a374"} />
-                          <stop offset="100%" stopColor={isBlack ? "#101014" : "#b28757"} />
+                          <stop offset="0%" stopColor={isBlack ? "#ffffff" : "#e3c8a2"} />
+                          <stop offset="68%" stopColor={isBlack ? "#f1efe9" : "#c9a374"} />
+                          <stop offset="100%" stopColor={isBlack ? "#dfdcd4" : "#b28757"} />
                         </linearGradient>
                       </defs>
                       <path
@@ -500,9 +500,9 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
                             x2="0%"
                             y2="100%"
                           >
-                            <stop offset="0%" stopColor={isBlack ? "#2a2a2f" : "#d9b98f"} />
-                            <stop offset="68%" stopColor={isBlack ? "#18181c" : "#be9668"} />
-                            <stop offset="100%" stopColor={isBlack ? "#0e0e11" : "#9f7649"} />
+                            <stop offset="0%" stopColor={isBlack ? "#f8f7f3" : "#d9b98f"} />
+                            <stop offset="68%" stopColor={isBlack ? "#eae7e0" : "#be9668"} />
+                            <stop offset="100%" stopColor={isBlack ? "#d8d4ca" : "#9f7649"} />
                           </linearGradient>
                         </defs>
                         <path
@@ -536,9 +536,9 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
                             x2="0%"
                             y2="100%"
                           >
-                            <stop offset="0%" stopColor={isBlack ? "#26262b" : "#d6b58b"} />
-                            <stop offset="55%" stopColor={isBlack ? "#16161a" : "#be9567"} />
-                            <stop offset="100%" stopColor={isBlack ? "#0d0d10" : "#a47b4d"} />
+                            <stop offset="0%" stopColor={isBlack ? "#faf9f6" : "#d6b58b"} />
+                            <stop offset="55%" stopColor={isBlack ? "#eceae4" : "#be9567"} />
+                            <stop offset="100%" stopColor={isBlack ? "#dcd8ce" : "#a47b4d"} />
                           </linearGradient>
                         </defs>
                         <path
@@ -548,8 +548,8 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
                         <path
                           d="M0,12 L96,12 Q130,36 164,12 L260,12"
                           fill="none"
-                          stroke={isBlack ? "#d7a442" : "#f4dec0"}
-                          strokeOpacity={isBlack ? "0.42" : "0.45"}
+                          stroke={isBlack ? "#b8a88a" : "#f4dec0"}
+                          strokeOpacity={isBlack ? "0.65" : "0.45"}
                           strokeWidth="1.5"
                         />
                       </svg>
