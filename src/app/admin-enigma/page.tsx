@@ -865,7 +865,7 @@ export default function AdminPage() {
               </div>
               <p className="controller-desc">
                 {isQuizOpen
-                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan soal investigasi 15 soal · 10 menit."
+                  ? "Akses peserta saat ini TERBUKA. Seluruh peserta dapat memilih nama dan mulai mengerjakan soal investigasi 15 soal · 5 menit."
                   : "Akses peserta saat ini DITUTUP. Tombol mulai di halaman peserta terkunci dan menunggu pengawas membuka sesi."}
               </p>
             </div>

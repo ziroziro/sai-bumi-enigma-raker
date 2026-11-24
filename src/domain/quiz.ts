@@ -95,7 +95,7 @@ export interface QuizResult {
   questions: QuizQuestion[];
 }
 
-export const QUIZ_DURATION_SECONDS = 600; // 10 menit
+export const QUIZ_DURATION_SECONDS = 300; // 5 menit
 export const QUIZ_QUESTION_COUNT = 15; // 15 soal
 export const QUIZ_KKM_SCORE = 80; // KKM kelulusan 80
 

@@ -73,6 +73,59 @@ const SAMPLE_POWERS: BlindPowerItem[] = [
   },
 ];
 
+const BLACK_POWERS: BlindPowerItem[] = [
+  {
+    id: "shield-1",
+    code: "PERISAI · 01",
+    category: "SHIELD · PERLINDUNGAN",
+    title: "Kartu Shield",
+    description:
+      "Dapat menahan serangan dari serangan apapun selama satu sesi.",
+    tone: "cyan",
+    imageSrc: "/images/blind-pick/dossier-shield.png",
+  },
+  {
+    id: "rescue-1",
+    code: "PENYELAMATAN · 02",
+    category: "BEBAS PENJARA",
+    title: "Selamatkan Teman / Dept Head dari Penjara",
+    description:
+      "Menyelamatkan teman atau Dept Head yang berada di penjara agar dapat kembali ke tim.",
+    tone: "gold",
+    imageSrc: "/images/blind-pick/dossier-rescue.png",
+  },
+  {
+    id: "jubir-1",
+    code: "INTERVENSI · 03",
+    category: "HAK TUNJUK JUBIR",
+    title: "Menunjuk Jubir Kelompok Lain",
+    description:
+      "Anda berhak menunjuk siapa yang menjadi juru bicara dari kelompok lawan pada sesi presentasi.",
+    tone: "violet",
+    imageSrc: "/images/blind-pick/dossier-jubir.png",
+  },
+  {
+    id: "jail-immune-1",
+    code: "IMUNITAS · 04",
+    category: "KEBAL PENJARA",
+    title: "Bebas Penjara (Next Mission)",
+    description:
+      "Imunitas penuh! Tidak bisa masuk penjara pada Next Mission berikutnya.",
+    tone: "amber",
+    imageSrc: "/images/blind-pick/dossier-kebal-penjara.png",
+  },
+  {
+    id: "black-zonk-1",
+    code: "KOSONG · 05",
+    category: "ZONK · NIHIL",
+    title: "Zonk",
+    description:
+      "Penyelidikan kali ini tidak membuahkan hasil sama sekali. Tidak ada poin dan tidak ada efek.",
+    tone: "smoke",
+    imageSrc: "/images/blind-pick/dossier-zonk.png",
+  },
+];
+
 function shufflePowers(items: BlindPowerItem[]): BlindPowerItem[] {
   const copy = [...items];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -87,8 +140,11 @@ function shufflePowers(items: BlindPowerItem[]): BlindPowerItem[] {
   return copy;
 }
 
-function createInitialEnvelopes(shouldShuffle: boolean): EnvelopeSlot[] {
-  const ordered = shouldShuffle ? shufflePowers(SAMPLE_POWERS) : SAMPLE_POWERS;
+function createInitialEnvelopes(
+  shouldShuffle: boolean,
+  sourcePowers: BlindPowerItem[] = SAMPLE_POWERS
+): EnvelopeSlot[] {
+  const ordered = shouldShuffle ? shufflePowers(sourcePowers) : sourcePowers;
   return ordered.map((power, idx) => ({
     slotNumber: idx + 1,
     power,
@@ -226,8 +282,12 @@ function playEnvelopeSound(type: "flip" | "open" | "zonk") {
   }
 }
 
-export function BlindPickApp() {
-  const [envelopes, setEnvelopes] = useState<EnvelopeSlot[]>(() => createInitialEnvelopes(false));
+export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "black" }) {
+  const isBlack = variant === "black";
+  const powerList = isBlack ? BLACK_POWERS : SAMPLE_POWERS;
+  const [envelopes, setEnvelopes] = useState<EnvelopeSlot[]>(() =>
+    createInitialEnvelopes(false, powerList)
+  );
   const [zoomedSlot, setZoomedSlot] = useState<EnvelopeSlot | null>(null);
   const [isShuffling, setIsShuffling] = useState(false);
   const timersRef = useRef<number[]>([]);
@@ -238,9 +298,9 @@ export function BlindPickApp() {
   }, []);
 
   useEffect(() => {
-    setEnvelopes(createInitialEnvelopes(true));
+    setEnvelopes(createInitialEnvelopes(true, powerList));
     return () => clearPendingTimers();
-  }, [clearPendingTimers]);
+  }, [clearPendingTimers, powerList]);
 
   useEffect(() => {
     if (!zoomedSlot) return;
@@ -297,7 +357,7 @@ export function BlindPickApp() {
     setEnvelopes((prev) => prev.map((item) => ({ ...item, phase: "closed" })));
 
     const shuffleTimer = window.setTimeout(() => {
-      setEnvelopes(createInitialEnvelopes(true));
+      setEnvelopes(createInitialEnvelopes(true, powerList));
       setIsShuffling(false);
     }, 480);
 
@@ -325,13 +385,20 @@ export function BlindPickApp() {
 
   return (
     <div className="blind-pick-backdrop">
-      <section className="blind-pick-stage">
+      <section className={`blind-pick-stage ${isBlack ? "is-black-variant" : ""}`}>
         <div className="blind-pick-header">
-          <p className="eyebrow">BLIND PICK · KARTU KEKUATAN RAHASIA</p>
-          <h1 className="blind-pick-title">PILIH BERKAS MISTERI</h1>
+          <p className="eyebrow">
+            {isBlack
+              ? "BLACK DOSSIER · KARTU PERLINDUNGAN & PENYELAMATAN"
+              : "BLIND PICK · KARTU KEKUATAN RAHASIA"}
+          </p>
+          <h1 className="blind-pick-title">
+            {isBlack ? "PILIH AMPLOP HITAM" : "PILIH BERKAS MISTERI"}
+          </h1>
           <p className="blind-pick-subtitle">
-            Pilih salah satu berkas tersegel untuk membalik, membuka segel lilin, dan mengungkap
-            kartu kekuatan rahasia di dalamnya.
+            {isBlack
+              ? "Pilih salah satu amplop hitam tersegel untuk mengungkap kartu Shield atau Penyelamatan dari Penjara."
+              : "Pilih salah satu berkas tersegel untuk membalik, membuka segel lilin, dan mengungkap kartu kekuatan rahasia di dalamnya."}
           </p>
 
           <div className="blind-pick-toolbar">
@@ -339,7 +406,7 @@ export function BlindPickApp() {
               type="button"
               className="btn btn-secondary"
               onClick={handleRevealAll}
-              disabled={openedCount === SAMPLE_POWERS.length || isShuffling}
+              disabled={openedCount === powerList.length || isShuffling}
             >
               Buka Semua
             </button>
@@ -391,9 +458,9 @@ export function BlindPickApp() {
                           x2="0%"
                           y2="100%"
                         >
-                          <stop offset="0%" stopColor="#e3c8a2" />
-                          <stop offset="68%" stopColor="#c9a374" />
-                          <stop offset="100%" stopColor="#b28757" />
+                          <stop offset="0%" stopColor={isBlack ? "#2d2d32" : "#e3c8a2"} />
+                          <stop offset="68%" stopColor={isBlack ? "#1a1a1f" : "#c9a374"} />
+                          <stop offset="100%" stopColor={isBlack ? "#101014" : "#b28757"} />
                         </linearGradient>
                       </defs>
                       <path
@@ -433,9 +500,9 @@ export function BlindPickApp() {
                             x2="0%"
                             y2="100%"
                           >
-                            <stop offset="0%" stopColor="#d9b98f" />
-                            <stop offset="68%" stopColor="#be9668" />
-                            <stop offset="100%" stopColor="#9f7649" />
+                            <stop offset="0%" stopColor={isBlack ? "#2a2a2f" : "#d9b98f"} />
+                            <stop offset="68%" stopColor={isBlack ? "#18181c" : "#be9668"} />
+                            <stop offset="100%" stopColor={isBlack ? "#0e0e11" : "#9f7649"} />
                           </linearGradient>
                         </defs>
                         <path
@@ -469,9 +536,9 @@ export function BlindPickApp() {
                             x2="0%"
                             y2="100%"
                           >
-                            <stop offset="0%" stopColor="#d6b58b" />
-                            <stop offset="55%" stopColor="#be9567" />
-                            <stop offset="100%" stopColor="#a47b4d" />
+                            <stop offset="0%" stopColor={isBlack ? "#26262b" : "#d6b58b"} />
+                            <stop offset="55%" stopColor={isBlack ? "#16161a" : "#be9567"} />
+                            <stop offset="100%" stopColor={isBlack ? "#0d0d10" : "#a47b4d"} />
                           </linearGradient>
                         </defs>
                         <path
@@ -481,8 +548,8 @@ export function BlindPickApp() {
                         <path
                           d="M0,12 L96,12 Q130,36 164,12 L260,12"
                           fill="none"
-                          stroke="#f4dec0"
-                          strokeOpacity="0.45"
+                          stroke={isBlack ? "#d7a442" : "#f4dec0"}
+                          strokeOpacity={isBlack ? "0.42" : "0.45"}
                           strokeWidth="1.5"
                         />
                       </svg>

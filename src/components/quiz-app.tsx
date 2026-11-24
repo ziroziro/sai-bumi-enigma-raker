@@ -671,7 +671,7 @@ export function QuizApp({
         </h2>
 
         <p className="quiz-desc">
-          Tantangan investigasi <strong>15 soal · 10 menit</strong> untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
+          Tantangan investigasi <strong>15 soal · 5 menit</strong> untuk menguji logika, deduksi, dan wawasan Enigma Sai Bumi.
           Kelompok terdeteksi otomatis saat memilih nama peserta. Soal diselesaikan secara berurutan satu per satu.
         </p>
 
@@ -681,7 +681,7 @@ export function QuizApp({
               <Icon name="clock" size={22} />
             </span>
             <div>
-              <strong>Durasi 10 Menit</strong>
+              <strong>Durasi 5 Menit</strong>
               <p>Jika browser ditutup atau halaman keluar, kuis tetap tersimpan dan melanjutkan waktu yang tersisa.</p>
             </div>
           </div>
@@ -894,12 +894,12 @@ export function QuizApp({
                   ? `${activeMissionShortLabel} Sudah Pernah Dikerjakan`
                   : !isQuizOpen
                   ? "Menunggu Mission Dibuka oleh Pengawas..."
-                  : `Mulai ${activeMissionShortLabel} (10 Menit)`}
+                  : `Mulai ${activeMissionShortLabel} (5 Menit)`}
               </span>
               <Icon name={!isQuizOpen ? "lock" : "arrow"} size={20} />
             </button>
             <p className="start-disclaimer">
-              Setelah dimulai, {activeMissionShortLabel} (15 soal) akan berjalan selama 10 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan secara otomatis.
+              Setelah dimulai, {activeMissionShortLabel} (15 soal) akan berjalan selama 5 menit. Jika browser tertutup, Anda dapat kembali dan melanjutkan secara otomatis.
             </p>
           </div>
         </form>
@@ -1178,7 +1178,7 @@ export function QuizApp({
               <Icon name="award" size={32} />
             </span>
             <span className="eyebrow">
-              {isTimeUp ? "WAKTU 10 MENIT SELESAI" : "INVESTIGASI SELESAI"}
+              {isTimeUp ? "WAKTU 5 MENIT SELESAI" : "INVESTIGASI SELESAI"}
             </span>
           </div>
 

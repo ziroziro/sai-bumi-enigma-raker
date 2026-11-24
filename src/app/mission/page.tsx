@@ -29,7 +29,7 @@ export default function MissionPage() {
                 Selamat datang di halaman Mission! Sesi Mission (Mission 1 sampai Mission 5) yang tampil di halaman ini otomatis mengikuti sesi yang sedang diaktifkan oleh Admin.
               </p>
               <p className="hero-instruction">
-                Pilih <strong>nama Anda</strong> dari daftar peserta. Kelompok tim Anda akan terdeteksi secara otomatis (Lupin, Detectif Jubun, Conan, atau Holmes). Selesaikan <strong>15 soal</strong> dalam waktu <strong>10 menit</strong>.
+                Pilih <strong>nama Anda</strong> dari daftar peserta. Kelompok tim Anda akan terdeteksi secara otomatis (Lupin, Detectif Jubun, Conan, atau Holmes). Selesaikan <strong>15 soal</strong> dalam waktu <strong>5 menit</strong>.
               </p>
             </div>
           </div>

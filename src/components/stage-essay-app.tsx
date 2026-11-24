@@ -82,10 +82,48 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
     setErrorMsg(null);
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setPhotoDataUrl(reader.result);
+      const rawDataUrl = typeof reader.result === "string" ? reader.result : null;
+      if (!rawDataUrl) return;
+
+      // Kompresi otomatis di browser (maks 1280px, JPEG 0.78) agar foto kamera HP selalu < 300KB
+      // dan tidak pernah ditolak batas 4.5MB Vercel Serverless.
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxDim = 1280;
+          let targetW = img.naturalWidth || img.width;
+          let targetH = img.naturalHeight || img.height;
+          if (targetW > maxDim || targetH > maxDim) {
+            if (targetW >= targetH) {
+              targetH = Math.round((targetH * maxDim) / targetW);
+              targetW = maxDim;
+            } else {
+              targetW = Math.round((targetW * maxDim) / targetH);
+              targetH = maxDim;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+            const compressed = canvas.toDataURL("image/jpeg", 0.78);
+            setPhotoDataUrl(compressed);
+            setPhotoFileName(file.name);
+            return;
+          }
+        } catch {
+          // fallback to original dataUrl if canvas fails
+        }
+        setPhotoDataUrl(rawDataUrl);
         setPhotoFileName(file.name);
-      }
+      };
+      img.onerror = () => {
+        setPhotoDataUrl(rawDataUrl);
+        setPhotoFileName(file.name);
+      };
+      img.src = rawDataUrl;
     };
     reader.readAsDataURL(file);
   }
@@ -125,16 +163,25 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
         }),
       });
 
-      const payload = (await res.json()) as {
+      const rawText = await res.text();
+      let payload: {
         error?: string;
         message?: string;
         submission?: { groupName: string };
         snapshot?: StageEssayStateSnapshot;
-      };
+      } = {};
+      try {
+        payload = rawText ? (JSON.parse(rawText) as typeof payload) : {};
+      } catch {
+        payload = {};
+      }
 
       if (!res.ok) {
-        setErrorMsg(payload.error || "Gagal menyimpan jawaban.");
-        await refreshState();
+        if (res.status === 413) {
+          setErrorMsg("Ukuran foto terlalu besar. Silakan pilih ulang foto atau kirim tanpa foto.");
+        } else {
+          setErrorMsg(payload.error || `Gagal menyimpan jawaban (HTTP ${res.status}). Silakan coba lagi.`);
+        }
         return;
       }
 
