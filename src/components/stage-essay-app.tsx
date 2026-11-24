@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/icon";
 import {
   STAGE_OFFICIAL_GROUPS,
@@ -65,19 +65,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
     }
   }, [activeStageNumber]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      void refreshState();
-    }, 5000);
-    const onFocus = () => {
-      void refreshState();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [refreshState]);
+  // Status form hanya diperiksa saat pengguna menekan tombol "Periksa Status Form" (tanpa auto-polling)
 
   function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -190,8 +178,8 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
           </span>
           <h1 className="dept-locked-gate-title">Form Misi Investigasi Sedang Ditutup</h1>
           <p className="dept-login-desc">
-            Admin belum membuka sesi pengumpulan jawaban saat ini. Halaman ini akan otomatis
-            terbuka begitu Admin membuka form input.
+            Admin belum membuka sesi pengumpulan jawaban saat ini. Setelah Admin membuka form,
+            klik tombol di bawah untuk memeriksa status terbaru.
           </p>
 
           <button
