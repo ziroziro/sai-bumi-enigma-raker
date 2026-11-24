@@ -1,6 +1,8 @@
 import { submitStageEssaySchema } from "@/domain/stage-essay";
 import {
   getStageEssaySnapshot,
+  hydrateStageEssayFromSupabase,
+  persistStageEssayToSupabase,
   StageEssayError,
   submitGroupStageEssay,
   syncStageScoresFromGoogleSpreadsheet,
@@ -11,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    await hydrateStageEssayFromSupabase();
     const url = new URL(request.url);
     const shouldSync = url.searchParams.get("sync") === "1";
 
@@ -18,6 +21,7 @@ export async function GET(request: Request) {
     if (shouldSync && snapshot.spreadsheetUrl) {
       try {
         snapshot = await syncStageScoresFromGoogleSpreadsheet();
+        await persistStageEssayToSupabase();
       } catch {
         snapshot = getStageEssaySnapshot();
       }
@@ -36,6 +40,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await hydrateStageEssayFromSupabase();
     const rawBody = await request.json().catch(() => null);
     const parsed = submitStageEssaySchema.safeParse(rawBody);
     if (!parsed.success) {
@@ -59,6 +64,7 @@ export async function POST(request: Request) {
         // ignore
       }
     }
+    await persistStageEssayToSupabase();
 
     return Response.json(
       {

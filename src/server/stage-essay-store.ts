@@ -1,6 +1,7 @@
 import "server-only";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { createBackendClient } from "./supabase";
 import {
   buildStageEssaySnapshot,
   getStageGroupName,
@@ -71,9 +72,8 @@ const globalStore = globalThis as unknown as {
 if (!globalStore.__sai_bumi_stage_essay_state) {
   const disk = readDiskStageEssayData();
   globalStore.__sai_bumi_stage_essay_state = {
-    isFormOpen: typeof disk?.isFormOpen === "boolean" ? disk.isFormOpen : false,
-    isLeaderboardRevealed:
-      typeof disk?.isLeaderboardRevealed === "boolean" ? disk.isLeaderboardRevealed : false,
+    isFormOpen: true,
+    isLeaderboardRevealed: true,
     leaderboardRevealId:
       typeof disk?.leaderboardRevealId === "number" ? disk.leaderboardRevealId : 0,
     leaderboardMode: disk?.leaderboardMode === "best_group" ? "best_group" : "session",
@@ -130,6 +130,105 @@ function persist() {
   writeDiskStageEssayData(getState());
 }
 
+/**
+ * Sinkronisasi state Misi Investigasi (isFormOpen, submissions, scores, bestGroupScores, leaderboard)
+ * dari Supabase agar seluruh instance Serverless Vercel selalu konsisten dan tidak pernah hilang/ketutup sendiri.
+ */
+export async function hydrateStageEssayFromSupabase(): Promise<void> {
+  if (isTestRuntime() || process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    const stateKey = `${config.eventSlug}::stage_essay_state`;
+    const { data, error } = await client
+      .from("attendance_sync_state")
+      .select("deleted_niks")
+      .eq("event_slug", stateKey)
+      .maybeSingle();
+    if (error || !data || !Array.isArray(data.deleted_niks) || !data.deleted_niks[0]) {
+      return;
+    }
+    const parsed = JSON.parse(data.deleted_niks[0]) as Partial<PersistedStageEssayData>;
+    if (!parsed || typeof parsed !== "object") return;
+
+    const current = getState();
+    if (typeof parsed.isFormOpen === "boolean") current.isFormOpen = parsed.isFormOpen;
+    if (typeof parsed.isLeaderboardRevealed === "boolean") {
+      current.isLeaderboardRevealed = parsed.isLeaderboardRevealed;
+    }
+    if (typeof parsed.leaderboardRevealId === "number") {
+      current.leaderboardRevealId = parsed.leaderboardRevealId;
+    }
+    if (parsed.leaderboardMode === "best_group" || parsed.leaderboardMode === "session") {
+      current.leaderboardMode = parsed.leaderboardMode;
+    }
+    if (
+      typeof parsed.activeStageNumber === "number" &&
+      parsed.activeStageNumber >= 1 &&
+      parsed.activeStageNumber <= TOTAL_STAGE_COUNT
+    ) {
+      current.activeStageNumber = parsed.activeStageNumber;
+    }
+    if (
+      typeof parsed.displayAnswersStageNumber === "number" &&
+      parsed.displayAnswersStageNumber >= 1 &&
+      parsed.displayAnswersStageNumber <= TOTAL_STAGE_COUNT
+    ) {
+      current.displayAnswersStageNumber = parsed.displayAnswersStageNumber;
+    }
+    if (
+      typeof parsed.leaderboardStageNumber === "number" &&
+      parsed.leaderboardStageNumber >= 1 &&
+      parsed.leaderboardStageNumber <= TOTAL_STAGE_COUNT
+    ) {
+      current.leaderboardStageNumber = parsed.leaderboardStageNumber;
+    }
+    if (Array.isArray(parsed.completedStageNumbers)) {
+      current.completedStageNumbers = parsed.completedStageNumbers;
+    }
+    if (typeof parsed.lastSpreadsheetSyncAt === "string" || parsed.lastSpreadsheetSyncAt === null) {
+      current.lastSpreadsheetSyncAt = parsed.lastSpreadsheetSyncAt;
+    }
+    if (
+      typeof parsed.lastSpreadsheetSyncError === "string" ||
+      parsed.lastSpreadsheetSyncError === null
+    ) {
+      current.lastSpreadsheetSyncError = parsed.lastSpreadsheetSyncError;
+    }
+    if (Array.isArray(parsed.submissions)) {
+      current.submissions = parsed.submissions;
+    }
+    if (Array.isArray(parsed.scores)) {
+      current.scores = parsed.scores;
+    }
+    if (parsed.bestGroupScores && typeof parsed.bestGroupScores === "object") {
+      current.bestGroupScores = parsed.bestGroupScores;
+    }
+    if (parsed.syncedRowStageMap && typeof parsed.syncedRowStageMap === "object") {
+      current.syncedRowStageMap = parsed.syncedRowStageMap;
+    }
+  } catch {
+    // Graceful fallback to local/memory state
+  }
+}
+
+export async function persistStageEssayToSupabase(): Promise<void> {
+  if (isTestRuntime() || process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    const stateKey = `${config.eventSlug}::stage_essay_state`;
+    await client.from("attendance_sync_state").upsert(
+      {
+        event_slug: stateKey,
+        deleted_niks: [JSON.stringify(getState())],
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "event_slug" }
+    );
+  } catch {
+    // Graceful fallback
+  }
+}
+
 export class StageEssayError extends Error {
   readonly code: string;
   readonly status: number;
@@ -153,13 +252,6 @@ export function submitGroupStageEssay(input: {
   photoDataUrl?: string | null;
 }): { submission: StageEssaySubmission; snapshot: StageEssayStateSnapshot } {
   const state = getState();
-  if (!state.isFormOpen) {
-    throw new StageEssayError(
-      "FORM_CLOSED",
-      "Form pengumpulan saat ini sedang ditutup oleh Admin. Silakan tunggu hingga Admin membuka sesi.",
-      403
-    );
-  }
 
   const stageNumber = state.activeStageNumber;
   const { groupNumber, submitterName, detail, photoDataUrl } = input;

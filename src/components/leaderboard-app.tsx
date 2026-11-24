@@ -266,9 +266,7 @@ function WinnerDetectiveBadgeSvg({ rank }: { rank: 1 | 2 | 3 }) {
 
 export function LeaderboardApp({ initialSnapshot }: LeaderboardAppProps) {
   const [snapshot, setSnapshot] = useState<StageEssayStateSnapshot>(initialSnapshot);
-  const [animateReveal, setAnimateReveal] = useState<boolean>(
-    initialSnapshot.isLeaderboardRevealed
-  );
+  const [animateReveal, setAnimateReveal] = useState<boolean>(true);
   const lastRevealIdRef = useRef<number>(initialSnapshot.leaderboardRevealId || 0);
 
   const pollLeaderboard = useCallback(async () => {
@@ -321,28 +319,7 @@ export function LeaderboardApp({ initialSnapshot }: LeaderboardAppProps) {
     top3.find((x) => x.rank === 3),
   ].filter((x): x is NonNullable<typeof x> => Boolean(x));
 
-  if (!snapshot.isLeaderboardRevealed) {
-    return (
-      <div className="page-shell leaderboard-stage-shell">
-        <div className="panel leaderboard-standby-card">
-          <div className="leaderboard-standby-ring" aria-hidden="true">
-            <Icon name="award" size={38} />
-          </div>
-          <span className="eyebrow">PENGUMUMAN TOP 3 KELOMPOK</span>
-          <h1 className="leaderboard-standby-title">Menunggu Reveal Leaderboard</h1>
-          <p className="leaderboard-standby-desc">
-            Rekapitulasi nilai dari seluruh sesi sedang disiapkan oleh Admin. Halaman ini akan
-            otomatis menampilkan animasi pengumuman <strong>3 Kelompok Teratas</strong> beserta total
-            nilainya begitu Admin menekan tombol Reveal.
-          </p>
-          <div className="leaderboard-pulse-bar" aria-hidden="true">
-            <span />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Leaderboard selalu terbuka langsung tanpa layar kunci menunggu reveal
   return (
     <div className="page-shell leaderboard-stage-shell">
       <div className="panel leaderboard-cinema-board">

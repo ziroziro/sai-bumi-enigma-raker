@@ -165,36 +165,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
     }
   }
 
-  // JIKA FORM BELUM DIBUKA OLEH ADMIN
-  if (!snapshot.isFormOpen) {
-    return (
-      <div className="dept-login-wrapper">
-        <div className="panel dept-login-card dept-locked-gate-card">
-          <div className="dept-locked-icon-ring" aria-hidden="true">
-            <Icon name="lock" size={28} />
-          </div>
-          <span className="eyebrow is-locked-eyebrow">
-            <Icon name="lock" size={13} /> FORM BELUM DIBUKA ADMIN
-          </span>
-          <h1 className="dept-locked-gate-title">Form Misi Investigasi Sedang Ditutup</h1>
-          <p className="dept-login-desc">
-            Admin belum membuka sesi pengumpulan jawaban saat ini. Setelah Admin membuka form,
-            klik tombol di bawah untuk memeriksa status terbaru.
-          </p>
-
-          <button
-            type="button"
-            className="btn-primary-link btn-submit-admin"
-            onClick={() => void refreshState()}
-            disabled={checkingStatus}
-          >
-            <Icon name="refresh" size={17} />
-            <span>{checkingStatus ? "Memeriksa Status..." : "Periksa Status Form"}</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Form Misi Investigasi selalu terbuka (tanpa penguncian buka/tutup halaman)
 
   // SETELAH SUBMIT: PESAN TERIMA KASIH & SUDAH DISIMPAN
   if (submittedSuccess) {

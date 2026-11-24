@@ -2,7 +2,9 @@ import { getStageGroupName, type StageScoreEntry } from "@/domain/stage-essay";
 import {
   deleteStageSubmission,
   getStageEssaySnapshot,
+  hydrateStageEssayFromSupabase,
   importStageScoresFromCsvText,
+  persistStageEssayToSupabase,
   resetStageSubmissions,
   saveBestGroupScores,
   setActiveStageNumber,
@@ -42,6 +44,7 @@ export async function GET(request: Request) {
     return Response.json({ error: "Sesi admin tidak valid." }, { status: 401 });
   }
 
+  await hydrateStageEssayFromSupabase();
   return Response.json(getStageEssaySnapshot(), {
     headers: {
       "Cache-Control": "no-store, no-cache, must-revalidate",
@@ -55,12 +58,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    await hydrateStageEssayFromSupabase();
     const body = await request.json().catch(() => ({}));
     const action = String(body?.action || "");
 
     if (action === "set_form_open") {
       const isOpen = Boolean(body?.isOpen);
       const snapshot = setFormOpenStatus(isOpen);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: isOpen
@@ -73,6 +78,7 @@ export async function POST(request: Request) {
     if (action === "set_leaderboard_revealed") {
       const revealed = Boolean(body?.revealed);
       const snapshot = setLeaderboardRevealedStatus(revealed);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: revealed
@@ -85,6 +91,7 @@ export async function POST(request: Request) {
     if (action === "set_active_stage") {
       const stageNumber = Number(body?.stageNumber);
       const snapshot = setActiveStageNumber(stageNumber);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: `Sesi aktif untuk penyimpanan form disetel ke Sesi ${stageNumber}.`,
@@ -95,6 +102,7 @@ export async function POST(request: Request) {
     if (action === "set_display_answers_stage") {
       const stageNumber = Number(body?.stageNumber);
       const snapshot = setDisplayAnswersStageNumber(stageNumber);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: `Halaman Jawaban Kelompok kini menampilkan Sesi ${stageNumber}.`,
@@ -105,6 +113,7 @@ export async function POST(request: Request) {
     if (action === "set_leaderboard_mode") {
       const mode = body?.mode === "best_group" ? "best_group" : "session";
       const snapshot = setLeaderboardDisplayMode(mode);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message:
@@ -118,6 +127,7 @@ export async function POST(request: Request) {
     if (action === "set_leaderboard_stage") {
       const stageNumber = Number(body?.stageNumber);
       const snapshot = setLeaderboardStageNumber(stageNumber);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: `Halaman Leaderboard disetel ke Sesi ${stageNumber}.`,
@@ -135,6 +145,7 @@ export async function POST(request: Request) {
         }
       }
       const snapshot = saveBestGroupScores(parsed);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Nilai Total Average Best Kelompok berhasil disimpan.",
@@ -146,6 +157,7 @@ export async function POST(request: Request) {
       const stageNumber = Number(body?.stageNumber);
       const completed = Boolean(body?.completed);
       const snapshot = setStageCompletedStatus(stageNumber, completed);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: completed
@@ -158,6 +170,7 @@ export async function POST(request: Request) {
     if (action === "sync_spreadsheet") {
       const spreadsheetUrl = typeof body?.spreadsheetUrl === "string" ? body.spreadsheetUrl : undefined;
       const snapshot = await syncStageScoresFromGoogleSpreadsheet(spreadsheetUrl);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Nilai dari Google Spreadsheet berhasil di-generate & diperbarui.",
@@ -168,6 +181,7 @@ export async function POST(request: Request) {
     if (action === "import_csv") {
       const csvText = String(body?.csvText || "");
       const snapshot = importStageScoresFromCsvText(csvText);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Data nilai CSV/Spreadsheet berhasil diimpor.",
@@ -198,6 +212,7 @@ export async function POST(request: Request) {
         .filter((x: StageScoreEntry | null): x is StageScoreEntry => x !== null);
 
       const snapshot = upsertStageScores(entries);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Penilaian sesi berhasil disimpan dan diakumulasikan ke Leaderboard.",
@@ -221,9 +236,11 @@ export async function DELETE(request: Request) {
   }
 
   try {
+    await hydrateStageEssayFromSupabase();
     const body = await request.json().catch(() => ({}));
     if (body?.all) {
       const snapshot = resetStageSubmissions();
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Seluruh respon dari Sesi 1-10 berhasil direset.",
@@ -233,6 +250,7 @@ export async function DELETE(request: Request) {
 
     if (typeof body?.stageNumber === "number") {
       const snapshot = resetStageSubmissions(body.stageNumber);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: `Respon pada Sesi ${body.stageNumber} berhasil direset.`,
@@ -242,6 +260,7 @@ export async function DELETE(request: Request) {
 
     if (typeof body?.id === "string") {
       const snapshot = deleteStageSubmission(body.id);
+      await persistStageEssayToSupabase();
       return Response.json({
         success: true,
         message: "Respon kelompok berhasil dihapus.",

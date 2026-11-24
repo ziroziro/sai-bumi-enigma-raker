@@ -161,8 +161,8 @@ export function QuizApp({
     () => Boolean(initialSession && !isInitiallyExpired)
   );
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [checkingQuizStatus, setCheckingQuizStatus] = useState(true);
+  const [isQuizOpen, setIsQuizOpen] = useState(true);
+  const [checkingQuizStatus, setCheckingQuizStatus] = useState(false);
 
   const [quizResult, setQuizResult] = useState<QuizResult | null>(() => {
     if (initialSession && isInitiallyExpired) {
@@ -298,31 +298,20 @@ export function QuizApp({
           };
 
           if (mode === "all") {
-            // Otomatis ikuti 1 Mission (Mission 1 - 5) yang sedang diaktifkan oleh Admin
-            const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? null;
-            if (openMissionId) {
-              setActiveQuizKey(openMissionId);
-              syncCompletedForChannel(openMissionId);
-              setIsQuizOpen(true);
-            } else {
-              syncCompletedForChannel(activeQuizKey);
-              setIsQuizOpen(false);
-            }
+            // Otomatis ikuti Mission (Mission 1 - 5) yang dipilih Admin; halaman selalu terbuka (default Mission 1)
+            const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? "pretest";
+            setActiveQuizKey(openMissionId);
+            syncCompletedForChannel(openMissionId);
+            setIsQuizOpen(true);
           } else if (mode === "quiz") {
-            // Otomatis ikuti 1 quiz (Quiz 1 - 4) yang sedang diaktifkan oleh Admin
-            const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? null;
-            if (openQuizId) {
-              setActiveQuizKey(openQuizId);
-              syncCompletedForChannel(openQuizId);
-              setIsQuizOpen(true);
-            } else {
-              syncCompletedForChannel(activeQuizKey);
-              setIsQuizOpen(false);
-            }
+            const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? "quiz-1";
+            setActiveQuizKey(openQuizId);
+            syncCompletedForChannel(openQuizId);
+            setIsQuizOpen(true);
           } else {
             setActiveQuizKey("pretest");
             syncCompletedForChannel("pretest");
-            setIsQuizOpen(channels.pretest);
+            setIsQuizOpen(true);
           }
 
           setCheckingQuizStatus(false);

@@ -29,6 +29,74 @@ export interface SubmitQuizPayload {
   timeSpentSeconds: number;
 }
 
+interface PersistedMissionBackup {
+  channels?: Partial<Record<QuizChannelId, boolean>>;
+  submissions?: QuizSubmissionRecord[];
+  updatedAt?: string;
+}
+
+async function hydrateMissionBackupFromSupabase(): Promise<void> {
+  if (process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    const stateKey = `${config.eventSlug}::mission_state`;
+    const { data, error } = await client
+      .from("attendance_sync_state")
+      .select("deleted_niks")
+      .eq("event_slug", stateKey)
+      .maybeSingle();
+    if (error || !data || !Array.isArray(data.deleted_niks) || !data.deleted_niks[0]) return;
+    const parsed = JSON.parse(data.deleted_niks[0]) as PersistedMissionBackup;
+    if (!parsed || typeof parsed !== "object") return;
+
+    if (parsed.channels && typeof parsed.channels === "object") {
+      syncLocalQuizStatus({
+        channels: {
+          pretest: Boolean(parsed.channels.pretest),
+          "quiz-1": Boolean(parsed.channels["quiz-1"]),
+          "quiz-2": Boolean(parsed.channels["quiz-2"]),
+          "quiz-3": Boolean(parsed.channels["quiz-3"]),
+          "quiz-4": Boolean(parsed.channels["quiz-4"]),
+        },
+        updatedAt: parsed.updatedAt || new Date().toISOString(),
+      });
+    }
+    if (Array.isArray(parsed.submissions)) {
+      for (const sub of parsed.submissions) {
+        if (sub && sub.participantId && sub.id) {
+          recordLocalQuizSubmission(sub);
+        }
+      }
+    }
+  } catch {
+    // Graceful fallback
+  }
+}
+
+async function persistMissionBackupToSupabase(): Promise<void> {
+  if (process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    const stateKey = `${config.eventSlug}::mission_state`;
+    const status = getQuizStatus();
+    const payload: PersistedMissionBackup = {
+      channels: status.channels,
+      submissions: getLocalQuizSubmissions(),
+      updatedAt: new Date().toISOString(),
+    };
+    await client.from("attendance_sync_state").upsert(
+      {
+        event_slug: stateKey,
+        deleted_niks: [JSON.stringify(payload)],
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "event_slug" }
+    );
+  } catch {
+    // Graceful fallback
+  }
+}
+
 export function verifyAdminPassword(password: string): boolean {
   if (!password) return false;
   const trimmed = String(password).trim();
@@ -79,12 +147,14 @@ export async function deleteQuizSubmission(submissionIdOrParticipantId: string):
     }
   }
 
+  await persistMissionBackupToSupabase();
   return getQuizSubmissionsList();
 }
 
 export async function resetAllQuizSubmissions(
   quizKey?: QuizChannelId
 ): Promise<QuizSubmissionRecord[]> {
+  await hydrateMissionBackupFromSupabase();
   const remaining = resetAllLocalQuizSubmissions(quizKey);
 
   if (process.env.APP_DATA_MODE !== "demo" && !quizKey) {
@@ -110,45 +180,12 @@ export async function resetAllQuizSubmissions(
     }
   }
 
+  await persistMissionBackupToSupabase();
   return remaining;
 }
 
 export async function getQuizSystemStatus(): Promise<QuizSystemStatus> {
-  if (process.env.APP_DATA_MODE !== "demo") {
-    try {
-      const { client, config } = createBackendClient();
-      const { data, error } = await client.rpc("get_quiz_system_status", {
-        p_event_slug: config.eventSlug,
-      });
-
-      if (!error && data && typeof data === "object") {
-        const parsed = data as Partial<QuizSystemStatus>;
-        if (typeof parsed.isOpen === "boolean") {
-          return syncLocalQuizStatus({
-            isOpen: parsed.isOpen,
-            updatedAt: parsed.updatedAt || new Date().toISOString(),
-          });
-        }
-      }
-
-      const { data: row, error: tableError } = await client
-        .from("quiz_settings")
-        .select("is_open, updated_at")
-        .eq("event_slug", config.eventSlug)
-        .maybeSingle();
-
-      if (!tableError && row) {
-        const typedRow = row as { is_open: boolean; updated_at: string };
-        return syncLocalQuizStatus({
-          isOpen: Boolean(typedRow.is_open),
-          updatedAt: typedRow.updated_at || new Date().toISOString(),
-        });
-      }
-    } catch {
-      // Graceful fallback to local store if database/migration is unavailable
-    }
-  }
-
+  await hydrateMissionBackupFromSupabase();
   return getQuizStatus();
 }
 
@@ -156,51 +193,9 @@ export async function setQuizSystemStatus(
   isOpen: boolean,
   channel: QuizChannelId = "pretest"
 ): Promise<QuizSystemStatus> {
+  await hydrateMissionBackupFromSupabase();
   const localUpdated = setQuizStatus(isOpen, channel);
-
-  if (process.env.APP_DATA_MODE !== "demo" && channel === "pretest") {
-    try {
-      const { client, config } = createBackendClient();
-      const { data, error } = await client.rpc("set_quiz_system_status", {
-        p_event_slug: config.eventSlug,
-        p_is_open: isOpen,
-      });
-
-      if (!error && data && typeof data === "object") {
-        const parsed = data as Partial<QuizSystemStatus>;
-        if (typeof parsed.isOpen === "boolean") {
-          return syncLocalQuizStatus({
-            isOpen: parsed.isOpen,
-            updatedAt: parsed.updatedAt || localUpdated.updatedAt,
-          });
-        }
-      }
-
-      const { data: row, error: tableError } = await client
-        .from("quiz_settings")
-        .upsert(
-          {
-            event_slug: config.eventSlug,
-            is_open: isOpen,
-            updated_at: localUpdated.updatedAt,
-          },
-          { onConflict: "event_slug" }
-        )
-        .select("is_open, updated_at")
-        .single();
-
-      if (!tableError && row) {
-        const typedRow = row as { is_open: boolean; updated_at: string };
-        return syncLocalQuizStatus({
-          isOpen: Boolean(typedRow.is_open),
-          updatedAt: typedRow.updated_at || localUpdated.updatedAt,
-        });
-      }
-    } catch {
-      // Graceful fallback to local store if database/migration is unavailable
-    }
-  }
-
+  await persistMissionBackupToSupabase();
   return localUpdated;
 }
 
@@ -235,10 +230,11 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
     completedAt,
   };
 
-  // Always keep in local server store for instant availability
+  // Always hydrate latest mission state, record locally, and persist to Supabase
+  await hydrateMissionBackupFromSupabase();
   recordLocalQuizSubmission(record);
 
-  // If Supabase backend is configured and not in demo mode (only sync pretest to legacy RPC)
+  // If Supabase backend is configured and not in demo mode (also sync pretest to quiz_submissions RPC)
   if (process.env.APP_DATA_MODE !== "demo" && quizKey === "pretest") {
     try {
       const { client, config } = createBackendClient();
@@ -254,10 +250,11 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
         p_answers: answers,
       });
     } catch {
-      // Graceful fallback to local store if Supabase table or migration is pending
+      // Graceful fallback to Supabase mission_state backup below
     }
   }
 
+  await persistMissionBackupToSupabase();
   return record;
 }
 
@@ -266,6 +263,8 @@ export async function getQuizSubmissionsList(): Promise<QuizSubmissionRecord[]> 
   if (process.env.APP_DATA_MODE === "demo") {
     return getLocalQuizSubmissions();
   }
+
+  await hydrateMissionBackupFromSupabase();
 
   try {
     const { client, config } = createBackendClient();

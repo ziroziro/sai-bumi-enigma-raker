@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { StageEssayApp } from "@/components/stage-essay-app";
-import { getStageEssaySnapshot } from "@/server/stage-essay-store";
+import {
+  getStageEssaySnapshot,
+  hydrateStageEssayFromSupabase,
+} from "@/server/stage-essay-store";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function StagePage() {
+  await hydrateStageEssayFromSupabase();
   const snapshot = getStageEssaySnapshot();
 
   return (
