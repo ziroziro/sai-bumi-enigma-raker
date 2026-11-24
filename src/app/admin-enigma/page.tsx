@@ -31,22 +31,25 @@ const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
 function getAdminHeaders(): HeadersInit {
   const token =
     typeof window !== "undefined"
-      ? sessionStorage.getItem("admin_enigma_token") || "P@ssw0rd#adminEnigma2026"
-      : "P@ssw0rd#adminEnigma2026";
+      ? sessionStorage.getItem("admin_enigma_token") || ""
+      : "";
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 }
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(true);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
+  const isAbsensiOnlyServer = process.env.NEXT_PUBLIC_APP_ROLE === "absensi";
   // Active Admin Tab: "quiz" | "attendance" | "catalog" | "dept-head" | "stage"
-  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head" | "stage">("quiz");
+  const [activeAdminTab, setActiveAdminTab] = useState<"quiz" | "attendance" | "catalog" | "dept-head" | "stage">(
+    isAbsensiOnlyServer ? "attendance" : "quiz"
+  );
   const [deptHeadSnapshot, setDeptHeadSnapshot] = useState<AdminDeptHeadSnapshot | null>(null);
   const [loadingDeptHead, setLoadingDeptHead] = useState(false);
 
@@ -120,17 +123,45 @@ export default function AdminPage() {
   const [catalogGroup, setCatalogGroup] = useState<string>("ALL");
   const [catalogSearch, setCatalogSearch] = useState("");
 
-  // Check login status on mount (dengan timeout 6 detik agar tidak pernah macet di "Memeriksa otentikasi admin...")
+  // Autentikasi disimpan khusus per-device di sessionStorage dan WAJIB diverifikasi ke server sebelum membuka dashboard
   useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+    const localToken =
+      typeof window !== "undefined" ? sessionStorage.getItem("admin_enigma_token") : null;
+    if (!localToken) {
+      setIsAuthenticated(false);
+      return;
+    }
 
-    async function checkAuth() {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+
+    async function verifyAndLoadAdminData() {
       try {
+        if (isAbsensiOnlyServer) {
+          const res = await fetch("/api/admin/attendance", {
+            headers: getAdminHeaders(),
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          window.clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.records) setAttendanceRecords(data.records);
+            if (Array.isArray(data.movements)) {
+              setAttendanceMovements(data.movements as RoomMovementLog[]);
+            }
+            setIsAuthenticated(true);
+          } else {
+            sessionStorage.removeItem("admin_enigma_token");
+            setIsAuthenticated(false);
+          }
+          return;
+        }
+
         const res = await fetch("/api/admin/results", {
           headers: getAdminHeaders(),
-          credentials: "include",
           signal: controller.signal,
+          cache: "no-store",
         });
         window.clearTimeout(timeoutId);
         if (res.ok) {
@@ -149,30 +180,22 @@ export default function AdminPage() {
           void fetchAttendance();
           void fetchDeptHead();
           void fetchStageSnapshot();
-        } else if (res.status === 401) {
-          setIsAuthenticated(false);
         } else {
-          // Server sementara lambat/500 tapi token valid -> tetap buka dashboard admin agar bisa refresh manual
-          setIsAuthenticated(true);
-          void fetchAttendance();
-          void fetchDeptHead();
-          void fetchStageSnapshot();
+          sessionStorage.removeItem("admin_enigma_token");
+          setIsAuthenticated(false);
         }
       } catch {
         window.clearTimeout(timeoutId);
-        // Jika timeout/jaringan lambat, tetap buka dashboard admin jika token tersedia, bukan macet loading
-        setIsAuthenticated(true);
-        void fetchAttendance();
-        void fetchDeptHead();
-        void fetchStageSnapshot();
+        sessionStorage.removeItem("admin_enigma_token");
+        setIsAuthenticated(false);
       }
     }
-    void checkAuth();
+    void verifyAndLoadAdminData();
     return () => {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, []);
+  }, [isAbsensiOnlyServer]);
 
   // Fetch submissions data
   async function refreshData() {
@@ -393,9 +416,14 @@ export default function AdminPage() {
           sessionStorage.setItem("admin_enigma_token", data.token);
         }
         setIsAuthenticated(true);
-        void refreshData();
-        void fetchAttendance();
-        void fetchDeptHead();
+        if (isAbsensiOnlyServer) {
+          void fetchAttendance();
+        } else {
+          void refreshData();
+          void fetchAttendance();
+          void fetchDeptHead();
+          void fetchStageSnapshot();
+        }
       } else {
         const data = await res.json();
         setLoginError(data.error || "Password admin tidak sesuai.");
@@ -585,6 +613,7 @@ export default function AdminPage() {
       if (catalogGroup === "2" && m.groupNumber !== 2) return false;
       if (catalogGroup === "3" && m.groupNumber !== 3) return false;
       if (catalogGroup === "4" && m.groupNumber !== 4) return false;
+      if (catalogGroup === "PANITIA" && m.jabatan.toUpperCase() !== "PANITIA") return false;
     }
     if (catalogSearch.trim()) {
       const q = catalogSearch.toLowerCase();
@@ -1300,14 +1329,18 @@ export default function AdminPage() {
             <div className="catalog-filters">
               <div className="filter-group-buttons">
                 <span className="filter-lbl">Filter Kelompok:</span>
-                {["ALL", "1", "2", "3", "4"].map((grp) => (
+                {["ALL", "1", "2", "3", "4", "PANITIA"].map((grp) => (
                   <button
                     key={grp}
                     type="button"
                     className={`btn-filter-grp ${catalogGroup === grp ? "is-active" : ""}`}
                     onClick={() => setCatalogGroup(grp)}
                   >
-                    {grp === "ALL" ? "Semua Tim (35)" : `Kelompok ${grp}`}
+                    {grp === "ALL"
+                      ? `Semua (${totalRoster})`
+                      : grp === "PANITIA"
+                      ? "Panitia (9)"
+                      : `Kelompok ${grp}`}
                   </button>
                 ))}
               </div>

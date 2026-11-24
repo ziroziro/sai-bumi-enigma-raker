@@ -2,6 +2,7 @@ import { submitStageEssaySchema } from "@/domain/stage-essay";
 import {
   getStageEssaySnapshot,
   hydrateStageEssayFromSupabase,
+  persistSingleStageSubmissionToSupabase,
   persistStageEssayToSupabase,
   StageEssayError,
   submitGroupStageEssay,
@@ -16,6 +17,8 @@ export async function GET(request: Request) {
     await hydrateStageEssayFromSupabase();
     const url = new URL(request.url);
     const shouldSync = url.searchParams.get("sync") === "1";
+    const isLite = url.searchParams.get("lite") === "1";
+    const stagePhotosMode = url.searchParams.get("stagePhotos");
 
     let snapshot = getStageEssaySnapshot();
     if (shouldSync && snapshot.spreadsheetUrl) {
@@ -25,6 +28,13 @@ export async function GET(request: Request) {
       } catch {
         snapshot = getStageEssaySnapshot();
       }
+    }
+
+    if (isLite) {
+      snapshot = getStageEssaySnapshot({ includePhotos: false });
+    } else if (stagePhotosMode === "active") {
+      const targetStage = snapshot.displayAnswersStageNumber || snapshot.activeStageNumber || 1;
+      snapshot = getStageEssaySnapshot({ includePhotos: true, photosOnlyForStage: targetStage });
     }
 
     return Response.json(snapshot, {
@@ -55,23 +65,30 @@ export async function POST(request: Request) {
 
     const result = submitGroupStageEssay(parsed.data);
 
-    let snapshot = result.snapshot;
-    const stageInfo = snapshot.stages.find((s) => s.stageNumber === result.submission.stageNumber);
-    if (stageInfo?.isAllGroupsSubmitted && snapshot.spreadsheetUrl) {
+    // Simpan ke baris individual per-kelompok-per-sesi (100% anti race-condition walau 4 kelompok submit bersamaan)
+    await persistSingleStageSubmissionToSupabase(result.submission);
+
+    const fullSnapshot = result.snapshot;
+    const stageInfo = fullSnapshot.stages.find(
+      (s) => s.stageNumber === result.submission.stageNumber
+    );
+    if (stageInfo?.isAllGroupsSubmitted && fullSnapshot.spreadsheetUrl) {
       try {
-        snapshot = await syncStageScoresFromGoogleSpreadsheet();
+        await syncStageScoresFromGoogleSpreadsheet();
+        await persistStageEssayToSupabase();
       } catch {
-        // ignore
+        // ignore spreadsheet sync errors on submit
       }
     }
-    await persistStageEssayToSupabase();
+
+    const liteSnapshot = getStageEssaySnapshot({ includePhotos: false });
 
     return Response.json(
       {
         success: true,
         message: `Terima kasih! Jawaban dari ${result.submission.groupName} sudah berhasil disimpan.`,
-        submission: result.submission,
-        snapshot,
+        submission: { ...result.submission, photoDataUrl: null },
+        snapshot: liteSnapshot,
       },
       { status: 201 }
     );

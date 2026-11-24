@@ -47,7 +47,7 @@ export function StageEssayApp({ initialSnapshot }: StageEssayAppProps) {
   const refreshState = useCallback(async () => {
     setCheckingStatus(true);
     try {
-      const res = await fetch("/api/stage-essay", { cache: "no-store" });
+      const res = await fetch("/api/stage-essay?lite=1", { cache: "no-store" });
       if (res.ok) {
         const data = (await res.json()) as StageEssayStateSnapshot;
         setSnapshot(data);

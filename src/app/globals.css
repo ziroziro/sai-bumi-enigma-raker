@@ -9866,3 +9866,703 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
 
 
 
+
+
+/* =========================================================================
+   UNDIAN AMPLOP PEMENANG (/doorprize)
+   ========================================================================= */
+.doorprize-backdrop {
+  min-height: calc(100vh - 140px);
+  padding: 28px 0 64px;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(215, 164, 66, 0.16), transparent 55%),
+    linear-gradient(180deg, rgba(16, 12, 9, 0.96), rgba(10, 8, 6, 0.98));
+}
+
+.doorprize-shell {
+  display: grid;
+  gap: 22px;
+  max-width: 1080px;
+}
+
+.doorprize-header {
+  text-align: center;
+  display: grid;
+  gap: 8px;
+}
+
+.doorprize-title {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: 0.08em;
+  color: #f7e4bc;
+}
+
+.doorprize-subtitle {
+  margin: 0 auto;
+  max-width: 640px;
+  color: rgba(236, 224, 200, 0.8);
+  font-size: 14px;
+}
+
+.doorprize-input-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 24px;
+  border: 1.5px solid rgba(215, 164, 66, 0.48);
+}
+
+.doorprize-input-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(245, 208, 124, 0.12) 48%,
+    transparent 74%
+  );
+  animation: galleryBtnShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.doorprize-input-row {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.doorprize-number-field {
+  flex: 1 1 240px;
+  display: grid;
+  gap: 8px;
+}
+
+.doorprize-animated-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  border-radius: 12px;
+  border: 2px solid rgba(215, 164, 66, 0.6);
+  background: rgba(12, 9, 7, 0.85);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.doorprize-animated-input-wrap:focus-within {
+  border-color: #f5cf76;
+  box-shadow: 0 0 0 4px rgba(245, 207, 118, 0.2), 0 8px 24px rgba(215, 164, 66, 0.22);
+  transform: translateY(-1px);
+}
+
+.doorprize-hash {
+  font-size: 24px;
+  font-weight: 800;
+  color: #f3ca74;
+}
+
+.doorprize-number-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #fff6df;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  outline: none;
+}
+
+.doorprize-input-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.doorprize-btn-open {
+  min-width: 170px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(215, 164, 66, 0.26);
+}
+
+.doorprize-error {
+  margin: 12px 0 0;
+  color: #ff8c82;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.doorprize-stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 390px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  border: 1.5px solid rgba(215, 164, 66, 0.36);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(215, 164, 66, 0.14), transparent 62%),
+    rgba(16, 12, 9, 0.86);
+}
+
+.doorprize-idle-state {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.doorprize-idle-envelope {
+  position: relative;
+  width: 220px;
+  height: 150px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #dcc198, #b68c5c);
+  border: 1.5px solid rgba(255, 232, 192, 0.45);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.52);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  animation: galleryIconFloat 3s ease-in-out infinite;
+}
+
+.doorprize-idle-flap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 68px;
+  background: linear-gradient(180deg, #e7cfa8, #c59b6b);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-radius: 12px 12px 0 0;
+}
+
+.doorprize-idle-seal {
+  position: relative;
+  z-index: 2;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #dc4c42, #871612 70%, #4d0806);
+  color: #ffd9a0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+.doorprize-idle-num {
+  position: relative;
+  z-index: 2;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: rgba(247, 234, 210, 0.9);
+  color: #4a2a10;
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+}
+
+.doorprize-stage-hint {
+  margin: 0;
+  color: rgba(236, 224, 200, 0.78);
+  font-size: 14px;
+}
+
+.doorprize-shuffle-stage {
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 680px;
+}
+
+.doorprize-shuffle-badge {
+  padding: 6px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 207, 118, 0.55);
+  background: rgba(245, 207, 118, 0.14);
+  color: #f7d98b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  animation: doorprizePulse 0.7s ease-in-out infinite alternate;
+}
+
+.doorprize-shuffle-reels {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px;
+}
+
+.doorprize-reel-box {
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(215, 164, 66, 0.55);
+  background: rgba(12, 9, 7, 0.92);
+  display: grid;
+  gap: 10px;
+  place-items: center;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 0 22px rgba(215, 164, 66, 0.12);
+}
+
+.doorprize-reel-box small {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(243, 202, 116, 0.78);
+}
+
+.doorprize-reel-box > strong {
+  font-size: 38px;
+  color: #fff2cc;
+  letter-spacing: 0.06em;
+}
+
+.doorprize-reel-person {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  justify-content: center;
+}
+
+.doorprize-reel-avatar {
+  width: 60px;
+  height: 74px;
+  border-radius: 10px;
+  object-fit: cover;
+  object-position: center 15%;
+  image-orientation: from-image;
+  border: 2px solid #f3ca74;
+  flex-shrink: 0;
+  background: #1c130b;
+}
+
+.doorprize-reel-avatar.is-initials,
+.doorprize-chip-avatar.is-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #5d4019, #2b1b0a);
+  color: #f7dc96;
+  font-weight: 800;
+}
+
+.doorprize-reel-person strong {
+  font-size: clamp(18px, 2.6vw, 26px);
+  color: #fff6df;
+  text-align: left;
+}
+
+/* Victory Envelope Opening & Winner Card */
+.doorprize-victory-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding-top: 24px;
+}
+
+.doorprize-victory-aura {
+  position: absolute;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 207, 118, 0.36), transparent 68%);
+  filter: blur(18px);
+  animation: doorprizeAuraPulse 2.4s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.doorprize-envelope-theater {
+  position: relative;
+  width: min(100%, 420px);
+  padding-top: 16px;
+}
+
+.doorprize-theater-back {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 150px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #b88c5b, #8b6238);
+  box-shadow: 0 22px 48px rgba(0, 0, 0, 0.62);
+}
+
+.doorprize-theater-flap {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 138px;
+  height: 92px;
+  background: linear-gradient(180deg, #e5cba0, #bd9261);
+  clip-path: polygon(0 100%, 50% 0, 100% 100%);
+  transform-origin: bottom center;
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.doorprize-victory-wrap.is-opening .doorprize-theater-flap {
+  transform: rotateX(65deg);
+}
+
+.doorprize-winner-card {
+  position: relative;
+  z-index: 3;
+  margin: 0 24px 36px;
+  padding: 26px 22px 24px;
+  border-radius: 16px;
+  border: 2px solid rgba(245, 207, 118, 0.82);
+  background: linear-gradient(165deg, #251b12 0%, #140e09 100%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 36px rgba(245, 207, 118, 0.25);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  transition: transform 0.75s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.55s ease;
+}
+
+.doorprize-victory-wrap.is-opening .doorprize-winner-card {
+  transform: translateY(72px) scale(0.9);
+  opacity: 0.35;
+}
+
+.doorprize-victory-wrap.is-revealed .doorprize-winner-card {
+  transform: translateY(-10px) scale(1);
+  opacity: 1;
+}
+
+.doorprize-winner-pill {
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d79b30, #f5cf76);
+  color: #1e1307;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.doorprize-winner-photo-ring {
+  width: 176px;
+  height: 214px;
+  border-radius: 16px;
+  padding: 4px;
+  background: linear-gradient(135deg, #fff1c2, #d79b30, #f5cf76);
+  box-shadow: 0 12px 32px rgba(215, 164, 66, 0.38);
+  overflow: hidden;
+}
+
+.doorprize-winner-photo,
+.doorprize-winner-initials {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  object-position: center 15%;
+  image-orientation: from-image;
+  display: block;
+  transform: none;
+  background: #1c130b;
+}
+
+.doorprize-winner-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3c2814, #1b1108);
+  color: #f7dc96;
+  font-size: 42px;
+  font-weight: 800;
+}
+
+.doorprize-winner-name {
+  margin: 4px 0 0;
+  font-size: clamp(22px, 3vw, 30px);
+  color: #fff6df;
+  letter-spacing: 0.04em;
+}
+
+.doorprize-winner-sub {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(243, 224, 186, 0.8);
+}
+
+.doorprize-theater-pocket {
+  position: absolute;
+  z-index: 4;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 62px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, #d8b88d, #b58958);
+  clip-path: polygon(0 0, 38% 0, 50% 34%, 62% 0, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.doorprize-confetti-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.doorprize-confetti-piece {
+  position: absolute;
+  top: -16px;
+  width: 9px;
+  height: 16px;
+  border-radius: 2px;
+  opacity: 0.9;
+  animation-name: doorprizeConfettiFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.doorprize-winners-panel,
+.doorprize-board {
+  padding: 20px 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.doorprize-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.doorprize-section-head h3 {
+  margin: 2px 0 0;
+  color: #f7e4bc;
+}
+
+.doorprize-winners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.doorprize-winner-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(215, 164, 66, 0.42);
+  background: rgba(20, 15, 11, 0.88);
+}
+
+.doorprize-chip-rank {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f5cf76;
+  min-width: 24px;
+}
+
+.doorprize-chip-avatar {
+  width: 42px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  object-position: center 15%;
+  image-orientation: from-image;
+  border: 1.5px solid #f3ca74;
+  flex-shrink: 0;
+  background: #1c130b;
+}
+
+.doorprize-chip-info {
+  display: grid;
+  min-width: 0;
+}
+
+.doorprize-chip-info strong {
+  font-size: 13px;
+  color: #fff6df;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doorprize-chip-info small {
+  font-size: 11px;
+  color: rgba(235, 220, 194, 0.72);
+}
+
+.doorprize-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 10px;
+}
+
+.doorprize-mini-env {
+  position: relative;
+  height: 58px;
+  border-radius: 10px;
+  border: 1px solid rgba(215, 164, 66, 0.45);
+  background: linear-gradient(150deg, #d9bc92, #b28757);
+  color: #3a210d;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.doorprize-mini-env:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(215, 164, 66, 0.25);
+}
+
+.doorprize-mini-env.is-selected {
+  outline: 2.5px solid #f7dc96;
+  box-shadow: 0 0 18px rgba(245, 207, 118, 0.55);
+}
+
+.doorprize-mini-env.is-opened {
+  background: rgba(34, 27, 21, 0.75);
+  border-color: rgba(215, 164, 66, 0.2);
+  color: rgba(243, 202, 116, 0.48);
+  cursor: default;
+}
+
+.mini-env-seal {
+  font-size: 10px;
+  color: #9c1f1a;
+}
+
+.doorprize-mini-env.is-opened .mini-env-seal {
+  color: #6fd392;
+}
+
+@keyframes doorprizePulse {
+  from {
+    opacity: 0.75;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes doorprizeAuraPulse {
+  from {
+    transform: scale(0.92);
+    opacity: 0.65;
+  }
+  to {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@keyframes doorprizeConfettiFall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(440px) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .doorprize-shuffle-reels {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Doorprize Roster Grid (Photo + Name only, upright portrait) */
+.doorprize-roster-panel {
+  padding: 20px;
+  transition: box-shadow 0.25s ease;
+}
+
+.doorprize-roster-panel.is-shuffling {
+  box-shadow: 0 0 28px rgba(245, 207, 118, 0.32);
+}
+
+.doorprize-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.doorprize-roster-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(215, 164, 66, 0.34);
+  background: rgba(20, 15, 11, 0.84);
+  text-align: center;
+  transition: transform 0.2s ease, opacity 0.25s ease;
+}
+
+.doorprize-roster-panel.is-shuffling .doorprize-roster-card {
+  animation: doorprizePulse 0.16s ease-in-out infinite alternate;
+}
+
+.doorprize-roster-card.is-won {
+  opacity: 0.4;
+  border-color: rgba(111, 211, 146, 0.45);
+}
+
+.doorprize-roster-photo-wrap {
+  width: 92px;
+  height: 112px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid rgba(243, 202, 116, 0.72);
+  background: #1c130b;
+  flex-shrink: 0;
+}
+
+.doorprize-roster-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 15%;
+  image-orientation: from-image;
+  display: block;
+  transform: none;
+}
+
+.doorprize-roster-initials {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4b3216, #1c1208);
+  color: #f7dc96;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.doorprize-roster-name {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: #fff6df;
+  word-break: break-word;
+}

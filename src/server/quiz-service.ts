@@ -109,24 +109,44 @@ async function hydrateMissionBackupFromSupabase(): Promise<void> {
   }
 }
 
+function invalidateQuizStatusCache(): void {
+  const g = globalThis as unknown as {
+    __sai_bumi_quiz_status_cache?: unknown;
+  };
+  g.__sai_bumi_quiz_status_cache = undefined;
+}
+
 async function persistSingleMissionSubmissionToSupabase(
   record: QuizSubmissionRecord
 ): Promise<void> {
   if (process.env.APP_DATA_MODE === "demo") return;
-  try {
-    const { client, config } = createBackendClient();
-    const ch = record.quizKey || "pretest";
-    const rowKey = `${config.eventSlug}::msub::${ch}::${record.participantId}`;
-    await client.from("attendance_sync_state").upsert(
-      {
-        event_slug: rowKey,
-        deleted_niks: [JSON.stringify(record)],
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "event_slug" }
+  const { client, config } = createBackendClient();
+  const ch = record.quizKey || "pretest";
+  const rowKey = `${config.eventSlug}::msub::${ch}::${record.participantId}`;
+  const payload = {
+    event_slug: rowKey,
+    deleted_niks: [JSON.stringify(record)],
+    updated_at: new Date().toISOString(),
+  };
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { error } = await client
+        .from("attendance_sync_state")
+        .upsert(payload, { onConflict: "event_slug" });
+      if (!error) return;
+      lastErr = error;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  if (lastErr) {
+    throw new Error(
+      `Gagal menyimpan hasil mission ke database: ${
+        lastErr instanceof Error ? lastErr.message : String((lastErr as { message?: string })?.message || lastErr)
+      }`
     );
-  } catch {
-    // Graceful fallback
   }
 }
 
@@ -182,28 +202,7 @@ async function deleteMissionSubmissionsFromSupabase(options: {
   }
 }
 
-export function verifyAdminPassword(password: string): boolean {
-  if (!password) return false;
-  const trimmed = String(password).trim();
-  const envPass = (process.env.ADMIN_PASSWORD || "").trim();
-
-  // Official master password
-  if (trimmed === "P@ssw0rd#adminEnigma2026") return true;
-
-  // Environment variable override if set
-  if (envPass && trimmed === envPass) return true;
-
-  // Legacy password fallback
-  if (trimmed === "adminenigma2026") return true;
-
-  // Case-insensitive tolerance for typos
-  const lower = trimmed.toLowerCase();
-  if (lower === "p@ssw0rd#adminenigma2026" || lower === "adminenigma2026") {
-    return true;
-  }
-
-  return false;
-}
+export { verifyAdminPassword } from "./admin-auth";
 
 export async function deleteQuizSubmission(submissionIdOrParticipantId: string): Promise<QuizSubmissionRecord[]> {
   deleteLocalQuizSubmission(submissionIdOrParticipantId);
@@ -233,6 +232,7 @@ export async function deleteQuizSubmission(submissionIdOrParticipantId: string):
   }
 
   await deleteMissionSubmissionsFromSupabase({ targetId: submissionIdOrParticipantId });
+  invalidateQuizStatusCache();
   return getQuizSubmissionsList();
 }
 
@@ -265,6 +265,7 @@ export async function resetAllQuizSubmissions(
   }
 
   await deleteMissionSubmissionsFromSupabase({ all: true, quizKey });
+  invalidateQuizStatusCache();
   return remaining;
 }
 
@@ -279,6 +280,7 @@ export async function setQuizSystemStatus(
 ): Promise<QuizSystemStatus> {
   const localUpdated = setQuizStatus(isOpen, channel);
   await persistMissionChannelsToSupabase(localUpdated.channels, localUpdated.updatedAt);
+  invalidateQuizStatusCache();
   return localUpdated;
 }
 
@@ -340,6 +342,7 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
     })(),
   ]);
 
+  invalidateQuizStatusCache();
   return record;
 }
 

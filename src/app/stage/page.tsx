@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 
 export default async function StagePage() {
   await hydrateStageEssayFromSupabase();
-  const snapshot = getStageEssaySnapshot();
+  const snapshot = getStageEssaySnapshot({ includePhotos: false });
 
   return (
     <>

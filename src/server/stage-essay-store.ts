@@ -159,73 +159,114 @@ export async function hydrateStageEssayFromSupabase(force = false): Promise<void
   try {
     const { client, config } = createBackendClient();
     const stateKey = `${config.eventSlug}::stage_essay_state`;
+    const subPrefix = `${config.eventSlug}::stage_sub::`;
     const { data, error } = await client
       .from("attendance_sync_state")
-      .select("deleted_niks")
-      .eq("event_slug", stateKey)
-      .maybeSingle();
+      .select("event_slug, deleted_niks")
+      .like("event_slug", `${config.eventSlug}::stage_%`);
     stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at = Date.now();
-    if (error || !data || !Array.isArray(data.deleted_niks) || !data.deleted_niks[0]) {
+    if (error || !Array.isArray(data) || data.length === 0) {
       return;
     }
-    const parsed = JSON.parse(data.deleted_niks[0]) as Partial<PersistedStageEssayData>;
-    if (!parsed || typeof parsed !== "object") return;
 
     const current = getState();
-    if (typeof parsed.isFormOpen === "boolean") current.isFormOpen = parsed.isFormOpen;
-    if (typeof parsed.isLeaderboardRevealed === "boolean") {
-      current.isLeaderboardRevealed = parsed.isLeaderboardRevealed;
+    const mergedByKey = new Map<string, StageEssaySubmission>();
+    for (const existing of current.submissions) {
+      mergedByKey.set(`${existing.stageNumber}-${existing.groupNumber}`, existing);
     }
-    if (typeof parsed.leaderboardRevealId === "number") {
-      current.leaderboardRevealId = parsed.leaderboardRevealId;
+
+    let hasAuthoritativeStateRow = false;
+    const individualSubs: StageEssaySubmission[] = [];
+
+    for (const row of data) {
+      const slug = String(row.event_slug || "");
+      const rawJson = Array.isArray(row.deleted_niks) ? row.deleted_niks[0] : null;
+      if (!rawJson) continue;
+
+      try {
+        if (slug === stateKey) {
+          const parsed = JSON.parse(rawJson) as Partial<PersistedStageEssayData>;
+          if (!parsed || typeof parsed !== "object") continue;
+          hasAuthoritativeStateRow = true;
+
+          if (typeof parsed.isFormOpen === "boolean") current.isFormOpen = parsed.isFormOpen;
+          if (typeof parsed.isLeaderboardRevealed === "boolean") {
+            current.isLeaderboardRevealed = parsed.isLeaderboardRevealed;
+          }
+          if (typeof parsed.leaderboardRevealId === "number") {
+            current.leaderboardRevealId = parsed.leaderboardRevealId;
+          }
+          if (parsed.leaderboardMode === "best_group" || parsed.leaderboardMode === "session") {
+            current.leaderboardMode = parsed.leaderboardMode;
+          }
+          if (
+            typeof parsed.activeStageNumber === "number" &&
+            parsed.activeStageNumber >= 1 &&
+            parsed.activeStageNumber <= TOTAL_STAGE_COUNT
+          ) {
+            current.activeStageNumber = parsed.activeStageNumber;
+          }
+          if (
+            typeof parsed.displayAnswersStageNumber === "number" &&
+            parsed.displayAnswersStageNumber >= 1 &&
+            parsed.displayAnswersStageNumber <= TOTAL_STAGE_COUNT
+          ) {
+            current.displayAnswersStageNumber = parsed.displayAnswersStageNumber;
+          }
+          if (
+            typeof parsed.leaderboardStageNumber === "number" &&
+            parsed.leaderboardStageNumber >= 1 &&
+            parsed.leaderboardStageNumber <= TOTAL_STAGE_COUNT
+          ) {
+            current.leaderboardStageNumber = parsed.leaderboardStageNumber;
+          }
+          if (Array.isArray(parsed.completedStageNumbers)) {
+            current.completedStageNumbers = parsed.completedStageNumbers;
+          }
+          if (typeof parsed.lastSpreadsheetSyncAt === "string" || parsed.lastSpreadsheetSyncAt === null) {
+            current.lastSpreadsheetSyncAt = parsed.lastSpreadsheetSyncAt;
+          }
+          if (
+            typeof parsed.lastSpreadsheetSyncError === "string" ||
+            parsed.lastSpreadsheetSyncError === null
+          ) {
+            current.lastSpreadsheetSyncError = parsed.lastSpreadsheetSyncError;
+          }
+          if (Array.isArray(parsed.submissions)) {
+            mergedByKey.clear();
+            for (const sub of parsed.submissions) {
+              if (sub && sub.stageNumber && sub.groupNumber) {
+                mergedByKey.set(`${sub.stageNumber}-${sub.groupNumber}`, sub);
+              }
+            }
+          }
+          if (Array.isArray(parsed.scores)) {
+            current.scores = parsed.scores;
+          }
+          if (parsed.bestGroupScores && typeof parsed.bestGroupScores === "object") {
+            current.bestGroupScores = parsed.bestGroupScores;
+          }
+          if (parsed.syncedRowStageMap && typeof parsed.syncedRowStageMap === "object") {
+            current.syncedRowStageMap = parsed.syncedRowStageMap;
+          }
+        } else if (slug.startsWith(subPrefix)) {
+          const sub = JSON.parse(rawJson) as StageEssaySubmission;
+          if (sub && sub.stageNumber && sub.groupNumber) {
+            individualSubs.push(sub);
+          }
+        }
+      } catch {
+        // ignore malformed row
+      }
     }
-    if (parsed.leaderboardMode === "best_group" || parsed.leaderboardMode === "session") {
-      current.leaderboardMode = parsed.leaderboardMode;
+
+    // Baris individual ::stage_sub:: selalu lebih baru / anti-race-condition
+    for (const sub of individualSubs) {
+      mergedByKey.set(`${sub.stageNumber}-${sub.groupNumber}`, sub);
     }
-    if (
-      typeof parsed.activeStageNumber === "number" &&
-      parsed.activeStageNumber >= 1 &&
-      parsed.activeStageNumber <= TOTAL_STAGE_COUNT
-    ) {
-      current.activeStageNumber = parsed.activeStageNumber;
-    }
-    if (
-      typeof parsed.displayAnswersStageNumber === "number" &&
-      parsed.displayAnswersStageNumber >= 1 &&
-      parsed.displayAnswersStageNumber <= TOTAL_STAGE_COUNT
-    ) {
-      current.displayAnswersStageNumber = parsed.displayAnswersStageNumber;
-    }
-    if (
-      typeof parsed.leaderboardStageNumber === "number" &&
-      parsed.leaderboardStageNumber >= 1 &&
-      parsed.leaderboardStageNumber <= TOTAL_STAGE_COUNT
-    ) {
-      current.leaderboardStageNumber = parsed.leaderboardStageNumber;
-    }
-    if (Array.isArray(parsed.completedStageNumbers)) {
-      current.completedStageNumbers = parsed.completedStageNumbers;
-    }
-    if (typeof parsed.lastSpreadsheetSyncAt === "string" || parsed.lastSpreadsheetSyncAt === null) {
-      current.lastSpreadsheetSyncAt = parsed.lastSpreadsheetSyncAt;
-    }
-    if (
-      typeof parsed.lastSpreadsheetSyncError === "string" ||
-      parsed.lastSpreadsheetSyncError === null
-    ) {
-      current.lastSpreadsheetSyncError = parsed.lastSpreadsheetSyncError;
-    }
-    if (Array.isArray(parsed.submissions)) {
-      current.submissions = parsed.submissions;
-    }
-    if (Array.isArray(parsed.scores)) {
-      current.scores = parsed.scores;
-    }
-    if (parsed.bestGroupScores && typeof parsed.bestGroupScores === "object") {
-      current.bestGroupScores = parsed.bestGroupScores;
-    }
-    if (parsed.syncedRowStageMap && typeof parsed.syncedRowStageMap === "object") {
-      current.syncedRowStageMap = parsed.syncedRowStageMap;
+
+    if (hasAuthoritativeStateRow || individualSubs.length > 0) {
+      current.submissions = Array.from(mergedByKey.values());
     }
   } catch {
     // Graceful fallback to local/memory state
@@ -235,6 +276,71 @@ export async function hydrateStageEssayFromSupabase(force = false): Promise<void
   })();
 
   return stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight;
+}
+
+export async function persistSingleStageSubmissionToSupabase(
+  submission: StageEssaySubmission
+): Promise<void> {
+  if (isTestRuntime() || process.env.APP_DATA_MODE === "demo") return;
+  const { client, config } = createBackendClient();
+  const rowKey = `${config.eventSlug}::stage_sub::${submission.stageNumber}::${submission.groupNumber}`;
+  const payload = {
+    event_slug: rowKey,
+    deleted_niks: [JSON.stringify(submission)],
+    updated_at: new Date().toISOString(),
+  };
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { error } = await client
+        .from("attendance_sync_state")
+        .upsert(payload, { onConflict: "event_slug" });
+      if (!error) {
+        stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at = Date.now();
+        return;
+      }
+      lastErr = error;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  if (lastErr) {
+    throw new Error(
+      `Gagal menyimpan jawaban kelompok ke database: ${
+        lastErr instanceof Error ? lastErr.message : String((lastErr as { message?: string })?.message || lastErr)
+      }`
+    );
+  }
+}
+
+export async function deleteStageSubmissionsFromSupabase(options: {
+  stageNumber?: number;
+  groupNumber?: number;
+  all?: boolean;
+}): Promise<void> {
+  if (isTestRuntime() || process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    if (options.all) {
+      await client
+        .from("attendance_sync_state")
+        .delete()
+        .like("event_slug", `${config.eventSlug}::stage_sub::%`);
+    } else if (typeof options.stageNumber === "number" && typeof options.groupNumber === "number") {
+      await client
+        .from("attendance_sync_state")
+        .delete()
+        .eq("event_slug", `${config.eventSlug}::stage_sub::${options.stageNumber}::${options.groupNumber}`);
+    } else if (typeof options.stageNumber === "number") {
+      await client
+        .from("attendance_sync_state")
+        .delete()
+        .like("event_slug", `${config.eventSlug}::stage_sub::${options.stageNumber}::%`);
+    }
+  } catch {
+    // ignore
+  }
 }
 
 export async function persistStageEssayToSupabase(): Promise<void> {
@@ -267,8 +373,34 @@ export class StageEssayError extends Error {
   }
 }
 
-export function getStageEssaySnapshot(): StageEssayStateSnapshot {
-  return buildStageEssaySnapshot(getState());
+export function getStageEssaySnapshot(options?: {
+  includePhotos?: boolean;
+  photosOnlyForStage?: number;
+}): StageEssayStateSnapshot {
+  const state = getState();
+  const includePhotos = options?.includePhotos !== false;
+  const photosOnlyForStage = options?.photosOnlyForStage;
+
+  if (includePhotos && typeof photosOnlyForStage !== "number") {
+    return buildStageEssaySnapshot(state);
+  }
+
+  const lightSubmissions = state.submissions.map((sub) => {
+    const keepPhoto =
+      includePhotos &&
+      typeof photosOnlyForStage === "number" &&
+      sub.stageNumber === photosOnlyForStage;
+    if (keepPhoto || !sub.photoDataUrl) return sub;
+    return {
+      ...sub,
+      photoDataUrl: null,
+    };
+  });
+
+  return buildStageEssaySnapshot({
+    ...state,
+    submissions: lightSubmissions,
+  });
 }
 
 export function submitGroupStageEssay(input: {

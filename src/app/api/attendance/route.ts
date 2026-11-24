@@ -58,8 +58,7 @@ export async function POST(req: Request) {
     }
 
     const records = await recordServerAttendance(cleanNik, timestamp);
-    const meta = await getServerAttendanceMetadata();
-    return NextResponse.json({ success: true, records, movements: meta.movements });
+    return NextResponse.json({ success: true, records });
   } catch {
     return NextResponse.json({ error: "Gagal mencatat kehadiran." }, { status: 500 });
   }

@@ -1,6 +1,8 @@
 import { getStageGroupName, type StageScoreEntry } from "@/domain/stage-essay";
+import { verifyAdminRequest } from "@/server/admin-auth";
 import {
   deleteStageSubmission,
+  deleteStageSubmissionsFromSupabase,
   getStageEssaySnapshot,
   hydrateStageEssayFromSupabase,
   importStageScoresFromCsvText,
@@ -23,20 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function checkAdminAuth(request: Request): boolean {
-  const cookie = request.headers.get("cookie") || "";
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.replace("Bearer ", "").trim();
-  const envPass = (process.env.ADMIN_PASSWORD || "").trim();
-  const validTokens = [
-    "P@ssw0rd#adminEnigma2026",
-    "adminenigma2026",
-    envPass,
-  ].filter(Boolean);
-
-  return (
-    cookie.includes("admin_session=authenticated") ||
-    validTokens.some((vt) => token === vt || token.toLowerCase() === vt.toLowerCase())
-  );
+  return verifyAdminRequest(request);
 }
 
 export async function GET(request: Request) {
@@ -240,7 +229,10 @@ export async function DELETE(request: Request) {
     const body = await request.json().catch(() => ({}));
     if (body?.all) {
       const snapshot = resetStageSubmissions();
-      await persistStageEssayToSupabase();
+      await Promise.all([
+        deleteStageSubmissionsFromSupabase({ all: true }),
+        persistStageEssayToSupabase(),
+      ]);
       return Response.json({
         success: true,
         message: "Seluruh respon dari Sesi 1-10 berhasil direset.",
@@ -250,7 +242,10 @@ export async function DELETE(request: Request) {
 
     if (typeof body?.stageNumber === "number") {
       const snapshot = resetStageSubmissions(body.stageNumber);
-      await persistStageEssayToSupabase();
+      await Promise.all([
+        deleteStageSubmissionsFromSupabase({ stageNumber: body.stageNumber }),
+        persistStageEssayToSupabase(),
+      ]);
       return Response.json({
         success: true,
         message: `Respon pada Sesi ${body.stageNumber} berhasil direset.`,
@@ -259,8 +254,18 @@ export async function DELETE(request: Request) {
     }
 
     if (typeof body?.id === "string") {
+      const currentSnapshot = getStageEssaySnapshot({ includePhotos: false });
+      const targetSub = currentSnapshot.submissions.find((s) => s.id === body.id);
       const snapshot = deleteStageSubmission(body.id);
-      await persistStageEssayToSupabase();
+      await Promise.all([
+        targetSub
+          ? deleteStageSubmissionsFromSupabase({
+              stageNumber: targetSub.stageNumber,
+              groupNumber: targetSub.groupNumber,
+            })
+          : Promise.resolve(),
+        persistStageEssayToSupabase(),
+      ]);
       return Response.json({
         success: true,
         message: "Respon kelompok berhasil dihapus.",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getGroupTitle } from "@/config/event";
 import { DEFAULT_DEPT_HEAD_CARDS, updateDeptHeadCardSchema } from "@/domain/dept-head";
+import { verifyAdminRequest } from "@/server/admin-auth";
 import { getDeptHeadAccounts } from "@/server/dept-head-auth";
 import {
   deleteDeptHeadSelection,
@@ -22,20 +23,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function checkAdminAuth(request: Request): boolean {
-  const cookie = request.headers.get("cookie") || "";
-  const authHeader = request.headers.get("authorization") || "";
-  const token = authHeader.replace("Bearer ", "").trim();
-  const envPass = (process.env.ADMIN_PASSWORD || "").trim();
-  const validTokens = [
-    "P@ssw0rd#adminEnigma2026",
-    "adminenigma2026",
-    envPass,
-  ].filter(Boolean);
-
-  return (
-    cookie.includes("admin_session=authenticated") ||
-    validTokens.some((vt) => token === vt || token.toLowerCase() === vt.toLowerCase())
-  );
+  return verifyAdminRequest(request);
 }
 
 export async function GET(request: Request) {

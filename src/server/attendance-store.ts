@@ -136,42 +136,82 @@ export function getServerAttendanceRecords(): Record<string, string> {
   return { ...state.records };
 }
 
-export async function getServerAttendanceMetadata(): Promise<AttendanceState> {
+const ATTENDANCE_CACHE_TTL_MS = 5_000;
+const attendanceCacheGlobal = globalThis as unknown as {
+  __sai_bumi_attendance_cache_expires_at?: number;
+  __sai_bumi_attendance_inflight?: Promise<AttendanceState>;
+};
+
+function invalidateAttendanceCache() {
+  attendanceCacheGlobal.__sai_bumi_attendance_cache_expires_at = 0;
+}
+
+export async function getServerAttendanceMetadata(force = false): Promise<AttendanceState> {
   if (isSupabaseConfigured()) {
-    const { client, config } = createBackendClient();
-    const [{ data, error }, syncMeta] = await Promise.all([
-      client
-        .from("attendance_records")
-        .select("nik, attended_at")
-        .eq("event_slug", config.eventSlug),
-      fetchSyncStateFromSupabase(),
-    ]);
-
-    if (error) {
-      throw new Error(`Gagal memuat data absensi dari Supabase: ${error.message}`);
+    const now = Date.now();
+    if (
+      !force &&
+      attendanceCacheGlobal.__sai_bumi_attendance_cache_expires_at &&
+      attendanceCacheGlobal.__sai_bumi_attendance_cache_expires_at > now
+    ) {
+      const cached = getActiveState();
+      return {
+        records: { ...cached.records },
+        movements: [...(cached.movements || [])],
+        lastResetAt: cached.lastResetAt,
+        deletedNiks: [...cached.deletedNiks],
+      };
     }
 
-    const dbRecords: Record<string, string> = {};
-    for (const row of data ?? []) {
-      if (row.nik && row.attended_at) {
-        dbRecords[String(row.nik).trim().toUpperCase()] = String(row.attended_at);
+    if (!force && attendanceCacheGlobal.__sai_bumi_attendance_inflight) {
+      return attendanceCacheGlobal.__sai_bumi_attendance_inflight;
+    }
+
+    const runFetch = (async (): Promise<AttendanceState> => {
+      try {
+        const { client, config } = createBackendClient();
+        const [{ data, error }, syncMeta] = await Promise.all([
+          client
+            .from("attendance_records")
+            .select("nik, attended_at")
+            .eq("event_slug", config.eventSlug),
+          fetchSyncStateFromSupabase(),
+        ]);
+
+        if (error) {
+          throw new Error(`Gagal memuat data absensi dari Supabase: ${error.message}`);
+        }
+
+        const dbRecords: Record<string, string> = {};
+        for (const row of data ?? []) {
+          if (row.nik && row.attended_at) {
+            dbRecords[String(row.nik).trim().toUpperCase()] = String(row.attended_at);
+          }
+        }
+
+        const cachedMovements = getActiveState().movements || [];
+        const syncedState: AttendanceState = {
+          records: dbRecords,
+          movements: cachedMovements,
+          lastResetAt: syncMeta.lastResetAt,
+          deletedNiks: syncMeta.deletedNiks,
+        };
+        setActiveState(syncedState);
+        attendanceCacheGlobal.__sai_bumi_attendance_cache_expires_at =
+          Date.now() + ATTENDANCE_CACHE_TTL_MS;
+        return {
+          records: { ...syncedState.records },
+          movements: [...syncedState.movements],
+          lastResetAt: syncedState.lastResetAt,
+          deletedNiks: [...syncedState.deletedNiks],
+        };
+      } finally {
+        attendanceCacheGlobal.__sai_bumi_attendance_inflight = undefined;
       }
-    }
+    })();
 
-    const cachedMovements = getActiveState().movements || [];
-    const syncedState: AttendanceState = {
-      records: dbRecords,
-      movements: cachedMovements,
-      lastResetAt: syncMeta.lastResetAt,
-      deletedNiks: syncMeta.deletedNiks,
-    };
-    setActiveState(syncedState);
-    return {
-      records: { ...syncedState.records },
-      movements: [...syncedState.movements],
-      lastResetAt: syncedState.lastResetAt,
-      deletedNiks: [...syncedState.deletedNiks],
-    };
+    attendanceCacheGlobal.__sai_bumi_attendance_inflight = runFetch;
+    return runFetch;
   }
 
   const state = getActiveState();
@@ -185,23 +225,13 @@ export async function getServerAttendanceMetadata(): Promise<AttendanceState> {
 
 export async function recordServerAttendance(
   nik: string,
-  timestamp?: string
+  _clientTimestamp?: string
 ): Promise<Record<string, string>> {
   const cleanNik = nik.trim().toUpperCase();
-  const isoStr = timestamp || new Date().toISOString();
+  // Selalu gunakan waktu server agar perbedaan jam di HP peserta tidak pernah menyebabkan scan ditolak diam-diam
+  const isoStr = new Date().toISOString();
 
   if (isSupabaseConfigured()) {
-    const syncMeta = await fetchSyncStateFromSupabase();
-    if (
-      syncMeta.lastResetAt &&
-      timestamp &&
-      new Date(timestamp).getTime() < new Date(syncMeta.lastResetAt).getTime()
-    ) {
-      // Ignore stale offline/self-heal replay recorded before an admin reset
-      const fresh = await getServerAttendanceMetadata();
-      return fresh.records;
-    }
-
     const { client, config } = createBackendClient();
     const member = findMemberByBarcode(cleanNik);
     const { error } = await client.from("attendance_records").upsert(
@@ -220,13 +250,33 @@ export async function recordServerAttendance(
       throw new Error(`Gagal menyimpan absensi ke database: ${error.message}`);
     }
 
-    if (syncMeta.deletedNiks.includes(cleanNik)) {
-      const remainingDeleted = syncMeta.deletedNiks.filter((n) => n !== cleanNik);
-      await persistSyncStateToSupabase(syncMeta.lastResetAt, remainingDeleted);
+    const state = getActiveState();
+    const wasPreviouslyDeleted = state.deletedNiks.includes(cleanNik);
+    const mergedRecords = {
+      ...state.records,
+      [cleanNik]: state.records[cleanNik] || isoStr,
+    };
+    setActiveState({
+      ...state,
+      records: mergedRecords,
+      deletedNiks: state.deletedNiks.filter((n) => n !== cleanNik),
+    });
+    invalidateAttendanceCache();
+
+    // Hanya bersihkan dari deletedNiks jika memang pernah dihapus (hemat 50% query Supabase saat scan massal)
+    if (wasPreviouslyDeleted) {
+      try {
+        const syncMeta = await fetchSyncStateFromSupabase();
+        if (syncMeta.deletedNiks.includes(cleanNik)) {
+          const remainingDeleted = syncMeta.deletedNiks.filter((n) => n !== cleanNik);
+          await persistSyncStateToSupabase(syncMeta.lastResetAt, remainingDeleted);
+        }
+      } catch {
+        // ignore non-fatal sync metadata cleanup
+      }
     }
 
-    const fresh = await getServerAttendanceMetadata();
-    return fresh.records;
+    return mergedRecords;
   }
 
   const state = getActiveState();
@@ -309,7 +359,8 @@ export async function deleteServerAttendance(nik: string): Promise<Record<string
       movements: (state.movements || []).filter((m) => m.nik.toUpperCase() !== cleanNik),
     });
 
-    const fresh = await getServerAttendanceMetadata();
+    invalidateAttendanceCache();
+    const fresh = await getServerAttendanceMetadata(true);
     return fresh.records;
   }
 
@@ -346,6 +397,7 @@ export async function resetAllServerAttendance(): Promise<Record<string, string>
     await persistSyncStateToSupabase(resetIso, []);
   }
 
+  invalidateAttendanceCache();
   setActiveState({
     records: {},
     movements: [],

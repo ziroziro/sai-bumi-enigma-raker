@@ -160,7 +160,6 @@ export function QuizApp({
   const [sessionRestored, setSessionRestored] = useState<boolean>(
     () => Boolean(initialSession && !isInitiallyExpired)
   );
-  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
   const [isQuizOpen, setIsQuizOpen] = useState(true);
   const [checkingQuizStatus, setCheckingQuizStatus] = useState(false);
 
@@ -261,74 +260,66 @@ export function QuizApp({
     };
   }, [configuration]);
 
-  // Check and poll quiz open/close status while in identity stage
+  // Fetch mission status ONCE on mount & after submit (tanpa auto-polling berkala agar tidak membebani Supabase)
+  const fetchMissionStatusOnce = useCallback(async () => {
+    setCheckingQuizStatus(true);
+    try {
+      const res = await fetch("/api/quiz/status", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        const channels: Record<QuizChannelId, boolean> = {
+          pretest: Boolean(data.channels?.pretest ?? data.isOpen),
+          "quiz-1": Boolean(data.channels?.["quiz-1"]),
+          "quiz-2": Boolean(data.channels?.["quiz-2"]),
+          "quiz-3": Boolean(data.channels?.["quiz-3"]),
+          "quiz-4": Boolean(data.channels?.["quiz-4"]),
+        };
+
+        const serverCompleted = data.completedByChannel as
+          | Partial<Record<QuizChannelId, string[]>>
+          | undefined;
+
+        const syncCompletedForChannel = (ch: QuizChannelId) => {
+          if (serverCompleted && Array.isArray(serverCompleted[ch])) {
+            const serverIds = serverCompleted[ch]!;
+            setCompletedIds(serverIds);
+            try {
+              localStorage.setItem(getCompletedStorageKey(ch), JSON.stringify(serverIds));
+            } catch {
+              // ignore
+            }
+          } else {
+            setCompletedIds(getCompletedParticipantIds(ch));
+          }
+        };
+
+        if (mode === "all") {
+          const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? "pretest";
+          setActiveQuizKey(openMissionId);
+          syncCompletedForChannel(openMissionId);
+          setIsQuizOpen(true);
+        } else if (mode === "quiz") {
+          const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? "quiz-1";
+          setActiveQuizKey(openQuizId);
+          syncCompletedForChannel(openQuizId);
+          setIsQuizOpen(true);
+        } else {
+          setActiveQuizKey("pretest");
+          syncCompletedForChannel("pretest");
+          setIsQuizOpen(true);
+        }
+      }
+    } catch {
+      // keep current state
+    } finally {
+      setCheckingQuizStatus(false);
+    }
+  }, [mode]);
+
   useEffect(() => {
     if (stage !== "identity") return;
-
-    let active = true;
-    async function checkStatus() {
-      try {
-        const res = await fetch("/api/quiz/status", { cache: "no-store" });
-        if (res.ok && active) {
-          const data = await res.json();
-          const channels: Record<QuizChannelId, boolean> = {
-            pretest: Boolean(data.channels?.pretest ?? data.isOpen),
-            "quiz-1": Boolean(data.channels?.["quiz-1"]),
-            "quiz-2": Boolean(data.channels?.["quiz-2"]),
-            "quiz-3": Boolean(data.channels?.["quiz-3"]),
-            "quiz-4": Boolean(data.channels?.["quiz-4"]),
-          };
-
-          const serverCompleted = data.completedByChannel as
-            | Partial<Record<QuizChannelId, string[]>>
-            | undefined;
-
-          const syncCompletedForChannel = (ch: QuizChannelId) => {
-            if (serverCompleted && Array.isArray(serverCompleted[ch])) {
-              const serverIds = serverCompleted[ch]!;
-              setCompletedIds(serverIds);
-              try {
-                localStorage.setItem(getCompletedStorageKey(ch), JSON.stringify(serverIds));
-              } catch {
-                // ignore
-              }
-            } else {
-              setCompletedIds(getCompletedParticipantIds(ch));
-            }
-          };
-
-          if (mode === "all") {
-            // Otomatis ikuti Mission (Mission 1 - 5) yang dipilih Admin; halaman selalu terbuka (default Mission 1)
-            const openMissionId = QUIZ_CHANNELS.find((ch) => channels[ch.id])?.id ?? "pretest";
-            setActiveQuizKey(openMissionId);
-            syncCompletedForChannel(openMissionId);
-            setIsQuizOpen(true);
-          } else if (mode === "quiz") {
-            const openQuizId = QUIZ_ONLY_CHANNEL_IDS.find((id) => channels[id]) ?? "quiz-1";
-            setActiveQuizKey(openQuizId);
-            syncCompletedForChannel(openQuizId);
-            setIsQuizOpen(true);
-          } else {
-            setActiveQuizKey("pretest");
-            syncCompletedForChannel("pretest");
-            setIsQuizOpen(true);
-          }
-
-          setCheckingQuizStatus(false);
-        }
-      } catch {
-        if (active) setCheckingQuizStatus(false);
-      }
-    }
-
-    void checkStatus();
-    const interval = setInterval(checkStatus, 10000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [stage, mode]);
+    void fetchMissionStatusOnce();
+  }, [stage, fetchMissionStatusOnce]);
 
   // Handle outside click for participant dropdown
   useEffect(() => {
@@ -419,7 +410,11 @@ export function QuizApp({
               body: submitBody,
               keepalive: true,
             });
-            if (res.ok) return;
+            if (res.ok) {
+              // Auto-sync status sekali tepat setelah submit berhasil (tanpa perlu polling berkala)
+              void fetchMissionStatusOnce();
+              return;
+            }
           } catch {
             // retry on transient network error
           }
@@ -450,71 +445,18 @@ export function QuizApp({
     return () => clearInterval(timer);
   }, [stage, finishQuiz]);
 
-  // Anti-Copy, Shortcut & Window Blur protection (tanpa deteksi ukuran layar DevTools agar tidak false-positive di HP/zoom browser)
+  // Proteksi ringan anti-copy saja (tanpa deteksi DevTools & tanpa auto-lock/blur overlay)
   useEffect(() => {
     if (stage !== "in_progress") return;
 
-    // Keyboard shortcut interception for Inspect, View Source, Save, Print
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "F12" || e.keyCode === 123) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
-
-      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
-      if (isCtrlOrMeta) {
-        const key = e.key.toLowerCase();
-        // Ctrl+Shift+I / J / C (DevTools inspector)
-        if (e.shiftKey && ["i", "j", "c"].includes(key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          return false;
-        }
-        // Ctrl+U (view source), Ctrl+S (save page), Ctrl+P (print), Ctrl+C (copy)
-        if (["u", "s", "p", "c"].includes(key)) {
-          e.preventDefault();
-          e.stopPropagation();
-          return false;
-        }
-      }
-    }
-
     function handleContextMenu(e: MouseEvent) {
       e.preventDefault();
-      e.stopPropagation();
       return false;
     }
 
-    function handleBlur() {
-      setIsWindowBlurred(true);
-    }
-
-    function handleFocus() {
-      setIsWindowBlurred(false);
-    }
-
-    function handleKeyUp(e: KeyboardEvent) {
-      if (e.key === "PrintScreen" || e.keyCode === 44) {
-        if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText("").catch(() => {});
-        }
-        setIsWindowBlurred(true);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("contextmenu", handleContextMenu, true);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("keyup", handleKeyUp);
-
     return () => {
-      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("contextmenu", handleContextMenu, true);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [stage]);
 
@@ -932,27 +874,6 @@ export function QuizApp({
         onDragStart={(e) => e.preventDefault()}
         tabIndex={0}
       >
-        {/* SCREENSHOT & WINDOW BLUR SHIELD OVERLAY */}
-        {isWindowBlurred && (
-          <div className="screenshot-shield-overlay" role="dialog" aria-modal="true">
-            <div className="shield-modal">
-              <span className="shield-icon-badge">
-                <Icon name="shield" size={40} />
-              </span>
-              <h3>Layar Kuis Disembunyikan</h3>
-              <p>Jendela kuis tidak aktif atau sedang membuka aplikasi lain. Klik tombol di bawah untuk melanjutkan kuis.</p>
-              <button
-                type="button"
-                className="btn-primary-link btn-resume-shield"
-                onClick={() => setIsWindowBlurred(false)}
-              >
-                <span>Lanjutkan Kuis</span>
-                <Icon name="arrow" size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* RESUME SESSION NOTIFICATION */}
         {sessionRestored && (
           <div className="quiz-restored-banner">

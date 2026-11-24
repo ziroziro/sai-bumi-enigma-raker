@@ -24,8 +24,9 @@ export function GroupAnswersApp({ initialSnapshot }: GroupAnswersAppProps) {
   const [zoomedCard, setZoomedCard] = useState<GroupAnswerCardData | null>(null);
 
   const pollSnapshot = useCallback(async () => {
+    if (typeof document !== "undefined" && document.hidden) return;
     try {
-      const res = await fetch("/api/stage-essay", { cache: "no-store" });
+      const res = await fetch("/api/stage-essay?stagePhotos=active", { cache: "no-store" });
       if (!res.ok) return;
       const latest = (await res.json()) as StageEssayStateSnapshot;
       setSnapshot(latest);
@@ -37,7 +38,7 @@ export function GroupAnswersApp({ initialSnapshot }: GroupAnswersAppProps) {
   useEffect(() => {
     const interval = window.setInterval(() => {
       void pollSnapshot();
-    }, 8000);
+    }, 10000);
     return () => window.clearInterval(interval);
   }, [pollSnapshot]);
 

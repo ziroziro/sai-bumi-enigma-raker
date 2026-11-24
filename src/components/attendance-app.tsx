@@ -241,38 +241,47 @@ export function AttendanceApp() {
         setMovements((prev) => [...prev, localEntry]);
       }
 
-      // Sync attendance / room movement to server database with automatic retry for resilience
+      // Sync attendance / room movement to server database with 4x automatic retry & keepalive
       const payload = JSON.stringify({
         nik: member.nik,
         timestamp: isoStr,
         sessionType: activeSession,
         ...(cleanReason ? { reason: cleanReason } : {}),
       });
-      void fetch("/api/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: payload,
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error("sync_failed");
-          const data = await res.json();
-          if (data.records) {
-            setRecords(data.records);
-            saveStoredRecords(data.records);
+      void (async () => {
+        const retryDelays = [0, 800, 1600, 2600];
+        for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+          if (retryDelays[attempt]! > 0) {
+            await new Promise((r) => setTimeout(r, retryDelays[attempt]!));
           }
-          if (Array.isArray(data.movements)) {
-            setMovements(data.movements as RoomMovementLog[]);
-          }
-        })
-        .catch(() => {
-          setTimeout(() => {
-            void fetch("/api/attendance", {
+          try {
+            const res = await fetch("/api/attendance", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: payload,
-            }).catch(() => {});
-          }, 800);
-        });
+              keepalive: true,
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data.records) {
+              setRecords((prev) => {
+                const merged = { ...prev, ...data.records };
+                saveStoredRecords(merged);
+                return merged;
+              });
+            }
+            if (Array.isArray(data.movements)) {
+              setMovements(data.movements as RoomMovementLog[]);
+            }
+            return;
+          } catch {
+            // retry on transient network error
+          }
+        }
+        setScanError(
+          `Peringatan: Koneksi lambat saat menyimpan absensi ${member.nama} (${member.nik}). Silakan scan ulang sekali lagi agar tercatat di database.`
+        );
+      })();
 
       // Set active scanned member and initiate typewriter animation on ID Card
       setLastScannedSession(activeSession);

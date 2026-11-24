@@ -16,7 +16,9 @@ export const metadata: Metadata = {
 
 export default async function JawabanKelompokPage() {
   await hydrateStageEssayFromSupabase();
-  const snapshot = getStageEssaySnapshot();
+  const meta = getStageEssaySnapshot({ includePhotos: false });
+  const targetStage = meta.displayAnswersStageNumber || meta.activeStageNumber || 1;
+  const snapshot = getStageEssaySnapshot({ includePhotos: true, photosOnlyForStage: targetStage });
 
   return (
     <>
