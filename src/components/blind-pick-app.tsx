@@ -88,11 +88,11 @@ const BLACK_POWERS: BlindPowerItem[] = [
     id: "rescue-1",
     code: "PENYELAMATAN · 02",
     category: "BEBAS PENJARA",
-    title: "Selamatkan Teman / Dept Head dari Penjara",
+    title: "Menyelamatkan Siapapun dari Penjara",
     description:
-      "Menyelamatkan teman atau Dept Head yang berada di penjara agar dapat kembali ke tim.",
+      "Gunakan kartu ini untuk menyelamatkan siapapun yang berada di penjara agar langsung bebas kembali.",
     tone: "gold",
-    imageSrc: "/images/blind-pick/dossier-rescue.png",
+    imageSrc: "/images/blind-pick/dossier-rescue-v2.png",
   },
   {
     id: "jubir-1",
