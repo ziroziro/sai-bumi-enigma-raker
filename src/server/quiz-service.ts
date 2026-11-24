@@ -39,59 +39,144 @@ async function hydrateMissionBackupFromSupabase(): Promise<void> {
   if (process.env.APP_DATA_MODE === "demo") return;
   try {
     const { client, config } = createBackendClient();
-    const stateKey = `${config.eventSlug}::mission_state`;
+    const prefix = `${config.eventSlug}::m`;
+    const channelsKey = `${config.eventSlug}::mission_channels`;
+    const legacyStateKey = `${config.eventSlug}::mission_state`;
+    const subPrefix = `${config.eventSlug}::msub::`;
+
+    // Satu query ringan membaca channel aktif + semua baris submission per-peserta (anti race-condition)
     const { data, error } = await client
       .from("attendance_sync_state")
-      .select("deleted_niks")
-      .eq("event_slug", stateKey)
-      .maybeSingle();
-    if (error || !data || !Array.isArray(data.deleted_niks) || !data.deleted_niks[0]) return;
-    const parsed = JSON.parse(data.deleted_niks[0]) as PersistedMissionBackup;
-    if (!parsed || typeof parsed !== "object") return;
+      .select("event_slug, deleted_niks, updated_at")
+      .like("event_slug", `${prefix}%`);
 
-    if (parsed.channels && typeof parsed.channels === "object") {
+    if (error || !Array.isArray(data)) return;
+
+    let channelsFromDedicated: Partial<Record<QuizChannelId, boolean>> | null = null;
+    let channelsUpdatedAt: string | undefined;
+    let channelsFromLegacy: Partial<Record<QuizChannelId, boolean>> | null = null;
+
+    for (const row of data) {
+      const slug = String(row.event_slug || "");
+      const rawJson = Array.isArray(row.deleted_niks) ? row.deleted_niks[0] : null;
+      if (!rawJson) continue;
+
+      try {
+        if (slug === channelsKey) {
+          const parsed = JSON.parse(rawJson) as PersistedMissionBackup;
+          if (parsed?.channels && typeof parsed.channels === "object") {
+            channelsFromDedicated = parsed.channels;
+            channelsUpdatedAt = parsed.updatedAt || row.updated_at || undefined;
+          }
+        } else if (slug === legacyStateKey) {
+          const parsed = JSON.parse(rawJson) as PersistedMissionBackup;
+          if (parsed?.channels && typeof parsed.channels === "object") {
+            channelsFromLegacy = parsed.channels;
+          }
+          if (Array.isArray(parsed?.submissions)) {
+            for (const sub of parsed.submissions) {
+              if (sub && sub.participantId && sub.id) {
+                recordLocalQuizSubmission(sub);
+              }
+            }
+          }
+        } else if (slug.startsWith(subPrefix)) {
+          const sub = JSON.parse(rawJson) as QuizSubmissionRecord;
+          if (sub && sub.participantId && sub.id) {
+            recordLocalQuizSubmission(sub);
+          }
+        }
+      } catch {
+        // ignore malformed row
+      }
+    }
+
+    const activeChannels = channelsFromDedicated ?? channelsFromLegacy;
+    if (activeChannels) {
       syncLocalQuizStatus({
         channels: {
-          pretest: Boolean(parsed.channels.pretest),
-          "quiz-1": Boolean(parsed.channels["quiz-1"]),
-          "quiz-2": Boolean(parsed.channels["quiz-2"]),
-          "quiz-3": Boolean(parsed.channels["quiz-3"]),
-          "quiz-4": Boolean(parsed.channels["quiz-4"]),
+          pretest: Boolean(activeChannels.pretest),
+          "quiz-1": Boolean(activeChannels["quiz-1"]),
+          "quiz-2": Boolean(activeChannels["quiz-2"]),
+          "quiz-3": Boolean(activeChannels["quiz-3"]),
+          "quiz-4": Boolean(activeChannels["quiz-4"]),
         },
-        updatedAt: parsed.updatedAt || new Date().toISOString(),
+        updatedAt: channelsUpdatedAt || new Date().toISOString(),
       });
-    }
-    if (Array.isArray(parsed.submissions)) {
-      for (const sub of parsed.submissions) {
-        if (sub && sub.participantId && sub.id) {
-          recordLocalQuizSubmission(sub);
-        }
-      }
     }
   } catch {
     // Graceful fallback
   }
 }
 
-async function persistMissionBackupToSupabase(): Promise<void> {
+async function persistSingleMissionSubmissionToSupabase(
+  record: QuizSubmissionRecord
+): Promise<void> {
   if (process.env.APP_DATA_MODE === "demo") return;
   try {
     const { client, config } = createBackendClient();
-    const stateKey = `${config.eventSlug}::mission_state`;
-    const status = getQuizStatus();
-    const payload: PersistedMissionBackup = {
-      channels: status.channels,
-      submissions: getLocalQuizSubmissions(),
-      updatedAt: new Date().toISOString(),
-    };
+    const ch = record.quizKey || "pretest";
+    const rowKey = `${config.eventSlug}::msub::${ch}::${record.participantId}`;
     await client.from("attendance_sync_state").upsert(
       {
-        event_slug: stateKey,
-        deleted_niks: [JSON.stringify(payload)],
+        event_slug: rowKey,
+        deleted_niks: [JSON.stringify(record)],
         updated_at: new Date().toISOString(),
       },
       { onConflict: "event_slug" }
     );
+  } catch {
+    // Graceful fallback
+  }
+}
+
+async function persistMissionChannelsToSupabase(
+  channels: Record<QuizChannelId, boolean>,
+  updatedAt: string
+): Promise<void> {
+  if (process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    const channelsKey = `${config.eventSlug}::mission_channels`;
+    await client.from("attendance_sync_state").upsert(
+      {
+        event_slug: channelsKey,
+        deleted_niks: [JSON.stringify({ channels, updatedAt })],
+        updated_at: updatedAt,
+      },
+      { onConflict: "event_slug" }
+    );
+  } catch {
+    // Graceful fallback
+  }
+}
+
+async function deleteMissionSubmissionsFromSupabase(options: {
+  targetId?: string;
+  quizKey?: QuizChannelId;
+  all?: boolean;
+}): Promise<void> {
+  if (process.env.APP_DATA_MODE === "demo") return;
+  try {
+    const { client, config } = createBackendClient();
+    if (options.all) {
+      if (options.quizKey) {
+        await client
+          .from("attendance_sync_state")
+          .delete()
+          .like("event_slug", `${config.eventSlug}::msub::${options.quizKey}::%`);
+      } else {
+        await client
+          .from("attendance_sync_state")
+          .delete()
+          .like("event_slug", `${config.eventSlug}::msub::%`);
+      }
+    } else if (options.targetId) {
+      await client
+        .from("attendance_sync_state")
+        .delete()
+        .like("event_slug", `${config.eventSlug}::msub::%::${options.targetId}`);
+    }
   } catch {
     // Graceful fallback
   }
@@ -147,14 +232,13 @@ export async function deleteQuizSubmission(submissionIdOrParticipantId: string):
     }
   }
 
-  await persistMissionBackupToSupabase();
+  await deleteMissionSubmissionsFromSupabase({ targetId: submissionIdOrParticipantId });
   return getQuizSubmissionsList();
 }
 
 export async function resetAllQuizSubmissions(
   quizKey?: QuizChannelId
 ): Promise<QuizSubmissionRecord[]> {
-  await hydrateMissionBackupFromSupabase();
   const remaining = resetAllLocalQuizSubmissions(quizKey);
 
   if (process.env.APP_DATA_MODE !== "demo" && !quizKey) {
@@ -180,7 +264,7 @@ export async function resetAllQuizSubmissions(
     }
   }
 
-  await persistMissionBackupToSupabase();
+  await deleteMissionSubmissionsFromSupabase({ all: true, quizKey });
   return remaining;
 }
 
@@ -193,9 +277,8 @@ export async function setQuizSystemStatus(
   isOpen: boolean,
   channel: QuizChannelId = "pretest"
 ): Promise<QuizSystemStatus> {
-  await hydrateMissionBackupFromSupabase();
   const localUpdated = setQuizStatus(isOpen, channel);
-  await persistMissionBackupToSupabase();
+  await persistMissionChannelsToSupabase(localUpdated.channels, localUpdated.updatedAt);
   return localUpdated;
 }
 
@@ -230,31 +313,33 @@ export async function submitQuizSubmission(payload: SubmitQuizPayload): Promise<
     completedAt,
   };
 
-  // Always hydrate latest mission state, record locally, and persist to Supabase
-  await hydrateMissionBackupFromSupabase();
+  // Simpan ke baris individual per-peserta di Supabase (100% anti race-condition walau 36 orang submit bersamaan)
   recordLocalQuizSubmission(record);
 
-  // If Supabase backend is configured and not in demo mode (also sync pretest to quiz_submissions RPC)
-  if (process.env.APP_DATA_MODE !== "demo" && quizKey === "pretest") {
-    try {
-      const { client, config } = createBackendClient();
-      await client.rpc("submit_quiz_submission", {
-        p_event_slug: config.eventSlug,
-        p_participant_id: participant.id,
-        p_group_number: groupNumber,
-        p_score: Math.round(score),
-        p_total_questions: totalQuestions,
-        p_correct_count: correctCount,
-        p_wrong_count: totalQuestions - correctCount,
-        p_time_spent_seconds: Math.round(timeSpentSeconds),
-        p_answers: answers,
-      });
-    } catch {
-      // Graceful fallback to Supabase mission_state backup below
-    }
-  }
+  await Promise.all([
+    persistSingleMissionSubmissionToSupabase(record),
+    (async () => {
+      if (process.env.APP_DATA_MODE !== "demo" && quizKey === "pretest") {
+        try {
+          const { client, config } = createBackendClient();
+          await client.rpc("submit_quiz_submission", {
+            p_event_slug: config.eventSlug,
+            p_participant_id: participant.id,
+            p_group_number: groupNumber,
+            p_score: Math.round(score),
+            p_total_questions: totalQuestions,
+            p_correct_count: correctCount,
+            p_wrong_count: totalQuestions - correctCount,
+            p_time_spent_seconds: Math.round(timeSpentSeconds),
+            p_answers: answers,
+          });
+        } catch {
+          // Graceful fallback — baris individual ::msub:: sudah tersimpan
+        }
+      }
+    })(),
+  ]);
 
-  await persistMissionBackupToSupabase();
   return record;
 }
 
