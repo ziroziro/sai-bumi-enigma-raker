@@ -2,9 +2,9 @@ import { isValidQuizChannelId } from "@/domain/quiz";
 import {
   deleteQuizSubmission,
   getQuizSubmissionsList,
-  getQuizSystemStatus,
   resetAllQuizSubmissions,
 } from "@/server/quiz-service";
+import { getQuizStatus } from "@/server/quiz-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   try {
     const submissions = await getQuizSubmissionsList();
     // getQuizSubmissionsList() sudah melakukan hydrateMissionBackupFromSupabase(), jadi status lokal sudah sinkron
-    const quizStatus = await getQuizSystemStatus();
+    const quizStatus = getQuizStatus();
     return Response.json({ submissions, quizStatus });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gagal memuat rekap nilai kuis.";
