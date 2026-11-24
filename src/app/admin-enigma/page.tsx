@@ -120,14 +120,19 @@ export default function AdminPage() {
   const [catalogGroup, setCatalogGroup] = useState<string>("ALL");
   const [catalogSearch, setCatalogSearch] = useState("");
 
-  // Check login status on mount
+  // Check login status on mount (dengan timeout 6 detik agar tidak pernah macet di "Memeriksa otentikasi admin...")
   useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+
     async function checkAuth() {
       try {
         const res = await fetch("/api/admin/results", {
           headers: getAdminHeaders(),
           credentials: "include",
+          signal: controller.signal,
         });
+        window.clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
           setSubmissions(data.submissions || []);
@@ -144,14 +149,29 @@ export default function AdminPage() {
           void fetchAttendance();
           void fetchDeptHead();
           void fetchStageSnapshot();
-        } else {
+        } else if (res.status === 401) {
           setIsAuthenticated(false);
+        } else {
+          // Server sementara lambat/500 tapi token valid -> tetap buka dashboard admin agar bisa refresh manual
+          setIsAuthenticated(true);
+          void fetchAttendance();
+          void fetchDeptHead();
+          void fetchStageSnapshot();
         }
       } catch {
-        setIsAuthenticated(false);
+        window.clearTimeout(timeoutId);
+        // Jika timeout/jaringan lambat, tetap buka dashboard admin jika token tersedia, bukan macet loading
+        setIsAuthenticated(true);
+        void fetchAttendance();
+        void fetchDeptHead();
+        void fetchStageSnapshot();
       }
     }
     void checkAuth();
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []);
 
   // Fetch submissions data

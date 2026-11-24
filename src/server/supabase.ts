@@ -7,7 +7,7 @@ export function createBackendClient() {
   const client = createClient(config.url, config.key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: {
-      fetch: (input, init) => fetch(input, { ...init, cache: "no-store", signal: AbortSignal.timeout(10_000) }),
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store", signal: AbortSignal.timeout(4_500) }),
     },
   });
   return { client, config };

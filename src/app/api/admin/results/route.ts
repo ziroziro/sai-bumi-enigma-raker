@@ -32,10 +32,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [submissions, quizStatus] = await Promise.all([
-      getQuizSubmissionsList(),
-      getQuizSystemStatus(),
-    ]);
+    const submissions = await getQuizSubmissionsList();
+    // getQuizSubmissionsList() sudah melakukan hydrateMissionBackupFromSupabase(), jadi status lokal sudah sinkron
+    const quizStatus = await getQuizSystemStatus();
     return Response.json({ submissions, quizStatus });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Gagal memuat rekap nilai kuis.";

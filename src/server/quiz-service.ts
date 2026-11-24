@@ -264,13 +264,15 @@ export async function getQuizSubmissionsList(): Promise<QuizSubmissionRecord[]> 
     return getLocalQuizSubmissions();
   }
 
-  await hydrateMissionBackupFromSupabase();
-
   try {
     const { client, config } = createBackendClient();
-    const { data, error } = await client.rpc("get_quiz_submissions_list", {
-      p_event_slug: config.eventSlug,
-    });
+    const [, rpcResult] = await Promise.all([
+      hydrateMissionBackupFromSupabase(),
+      client.rpc("get_quiz_submissions_list", {
+        p_event_slug: config.eventSlug,
+      }),
+    ]);
+    const { data, error } = rpcResult;
 
     if (error || !data) {
       return getLocalQuizSubmissions();
