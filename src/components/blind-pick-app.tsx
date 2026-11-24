@@ -405,6 +405,9 @@ export function BlindPickApp() {
                       <div className="blind-wax-seal" aria-hidden="true">
                         <WaxSealSvg uid={`seal-${item.slotNumber}`} />
                       </div>
+                      <span className="blind-envelope-number" aria-hidden="true">
+                        {String(item.slotNumber).padStart(2, "0")}
+                      </span>
                     </div>
                   </div>
 

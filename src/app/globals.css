@@ -8464,6 +8464,27 @@ code { background: #382a20; color: #f0c675; padding: 2px 5px; overflow-wrap: any
   animation: blindShufflePulse 0.45s ease-in-out;
 }
 
+.blind-envelope-number {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 54px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(92, 56, 26, 0.55);
+  background: rgba(246, 232, 206, 0.86);
+  color: #4a2b12;
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-align: center;
+  line-height: 1.1;
+  box-shadow: 0 3px 10px rgba(42, 22, 8, 0.22), inset 0 1px 0 rgba(255, 250, 238, 0.8);
+  pointer-events: none;
+}
+
 .blind-envelope-card {
   position: relative;
   width: 260px;
