@@ -37,7 +37,7 @@ export function GroupAnswersApp({ initialSnapshot }: GroupAnswersAppProps) {
   useEffect(() => {
     const interval = window.setInterval(() => {
       void pollSnapshot();
-    }, 4000);
+    }, 8000);
     return () => window.clearInterval(interval);
   }, [pollSnapshot]);
 

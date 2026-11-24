@@ -297,7 +297,7 @@ export function LeaderboardApp({ initialSnapshot }: LeaderboardAppProps) {
   useEffect(() => {
     const interval = setInterval(() => {
       void pollLeaderboard();
-    }, 3500);
+    }, 8000);
     const onFocus = () => {
       void pollLeaderboard();
     };

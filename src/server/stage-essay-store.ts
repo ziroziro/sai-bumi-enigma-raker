@@ -130,12 +130,32 @@ function persist() {
   writeDiskStageEssayData(getState());
 }
 
+const STAGE_HYDRATE_TTL_MS = 8_000;
+const stageHydrateGlobal = globalThis as unknown as {
+  __sai_bumi_stage_last_hydrated_at?: number;
+  __sai_bumi_stage_hydrate_inflight?: Promise<void>;
+};
+
 /**
  * Sinkronisasi state Misi Investigasi (isFormOpen, submissions, scores, bestGroupScores, leaderboard)
  * dari Supabase agar seluruh instance Serverless Vercel selalu konsisten dan tidak pernah hilang/ketutup sendiri.
+ * Menggunakan TTL cache 8 detik + deduplikasi agar beban koneksi Supabase tetap ringan.
  */
-export async function hydrateStageEssayFromSupabase(): Promise<void> {
+export async function hydrateStageEssayFromSupabase(force = false): Promise<void> {
   if (isTestRuntime() || process.env.APP_DATA_MODE === "demo") return;
+  const now = Date.now();
+  if (
+    !force &&
+    stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at &&
+    now - stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at < STAGE_HYDRATE_TTL_MS
+  ) {
+    return;
+  }
+  if (stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight) {
+    return stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight;
+  }
+
+  stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight = (async () => {
   try {
     const { client, config } = createBackendClient();
     const stateKey = `${config.eventSlug}::stage_essay_state`;
@@ -144,6 +164,7 @@ export async function hydrateStageEssayFromSupabase(): Promise<void> {
       .select("deleted_niks")
       .eq("event_slug", stateKey)
       .maybeSingle();
+    stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at = Date.now();
     if (error || !data || !Array.isArray(data.deleted_niks) || !data.deleted_niks[0]) {
       return;
     }
@@ -208,7 +229,12 @@ export async function hydrateStageEssayFromSupabase(): Promise<void> {
     }
   } catch {
     // Graceful fallback to local/memory state
+  } finally {
+    stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight = undefined;
   }
+  })();
+
+  return stageHydrateGlobal.__sai_bumi_stage_hydrate_inflight;
 }
 
 export async function persistStageEssayToSupabase(): Promise<void> {
@@ -224,6 +250,7 @@ export async function persistStageEssayToSupabase(): Promise<void> {
       },
       { onConflict: "event_slug" }
     );
+    stageHydrateGlobal.__sai_bumi_stage_last_hydrated_at = Date.now();
   } catch {
     // Graceful fallback
   }

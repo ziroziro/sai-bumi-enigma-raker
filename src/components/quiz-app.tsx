@@ -322,7 +322,7 @@ export function QuizApp({
     }
 
     void checkStatus();
-    const interval = setInterval(checkStatus, 3000);
+    const interval = setInterval(checkStatus, 10000);
 
     return () => {
       active = false;
