@@ -42,34 +42,34 @@ const SAMPLE_POWERS: BlindPowerItem[] = [
     imageSrc: "/images/blind-pick/dossier-masuk-penjara.png",
   },
   {
+    id: "prison-3",
+    code: "SABOTASE · 03",
+    category: "KASUS TERTUTUP: MASUK PENJARA",
+    title: "Mengurangi 1 orang dari tim lawan (Masuk Penjara)",
+    description:
+      "Target langsung dikurung di sel penjara, kehilangan giliran atau dikeluarkan sementara.",
+    tone: "crimson",
+    imageSrc: "/images/blind-pick/dossier-masuk-penjara.png",
+  },
+  {
+    id: "prison-4",
+    code: "SABOTASE · 04",
+    category: "KASUS TERTUTUP: MASUK PENJARA",
+    title: "Mengurangi 1 orang dari tim lawan (Masuk Penjara)",
+    description:
+      "Target langsung dikurung di sel penjara, kehilangan giliran atau dikeluarkan sementara.",
+    tone: "crimson",
+    imageSrc: "/images/blind-pick/dossier-masuk-penjara.png",
+  },
+  {
     id: "swap-member-1",
-    code: "ROTASI · 03",
+    code: "ROTASI · 05",
     category: "MUTASI DETEKTIF",
     title: "Tukar Anggota tim non ketua (Permanent)",
     description:
       "Tukarkan 1 anggota tim Anda (selain ketua) dengan 1 anggota dari tim lawan secara permanen.",
     tone: "cyan",
     imageSrc: "/images/blind-pick/dossier-tukar-anggota.png",
-  },
-  {
-    id: "swap-member-2",
-    code: "ROTASI · 04",
-    category: "MUTASI DETEKTIF",
-    title: "Tukar Anggota tim non ketua (Permanent)",
-    description:
-      "Tukarkan 1 anggota tim Anda (selain ketua) dengan 1 anggota dari tim lawan secara permanen.",
-    tone: "cyan",
-    imageSrc: "/images/blind-pick/dossier-tukar-anggota.png",
-  },
-  {
-    id: "zonk-1",
-    code: "KOSONG · 05",
-    category: "ZONK · NIHIL",
-    title: "Zonk",
-    description:
-      "Penyelidikan kali ini tidak membuahkan hasil sama sekali. Tidak ada poin dan tidak ada efek.",
-    tone: "smoke",
-    imageSrc: "/images/blind-pick/dossier-zonk.png",
   },
 ];
 
@@ -324,12 +324,35 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
 
     if (target.phase !== "closed") return;
 
+    let resolvedPower = target.power;
+    let swapWithSlot: number | null = null;
+    if (!isBlack && !target.power.id.startsWith("prison-")) {
+      const donor = envelopes.find(
+        (item) =>
+          item.slotNumber !== slotNumber &&
+          item.phase === "closed" &&
+          item.power.id.startsWith("prison-")
+      );
+      if (donor) {
+        resolvedPower = donor.power;
+        swapWithSlot = donor.slotNumber;
+      }
+    }
+
+    const effectiveTarget: EnvelopeSlot = { ...target, power: resolvedPower };
+
     playEnvelopeSound("flip");
 
     setEnvelopes((prev) =>
-      prev.map((item) =>
-        item.slotNumber === slotNumber ? { ...item, phase: "flipped" } : item
-      )
+      prev.map((item) => {
+        if (item.slotNumber === slotNumber) {
+          return { ...item, power: resolvedPower, phase: "flipped" };
+        }
+        if (swapWithSlot !== null && item.slotNumber === swapWithSlot) {
+          return { ...item, power: target.power };
+        }
+        return item;
+      })
     );
 
     // Tahap 2: Lipatan terbuka natural dan berkas meluncur keluar
@@ -339,12 +362,12 @@ export function BlindPickApp({ variant = "classic" }: { variant?: "classic" | "b
           item.slotNumber === slotNumber ? { ...item, phase: "opened" } : item
         )
       );
-      playEnvelopeSound(target.power.tone === "smoke" ? "zonk" : "open");
+      playEnvelopeSound(effectiveTarget.power.tone === "smoke" ? "zonk" : "open");
     }, 430);
 
     // Tahap 3: Berkas langsung zoom keluar ke tengah layar
     const zoomTimer = window.setTimeout(() => {
-      setZoomedSlot({ ...target, phase: "opened" });
+      setZoomedSlot({ ...effectiveTarget, phase: "opened" });
     }, 980);
 
     timersRef.current.push(openTimer, zoomTimer);
