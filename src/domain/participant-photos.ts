@@ -62,6 +62,11 @@ const PHOTO_BY_NIK: Record<string, string> = {
   PANITIA07: "/images/peserta/PANITIA07.jpg", // JOKO HERIYANTO
   PANITIA08: "/images/peserta/PANITIA08.jpg", // RIDHO AKBAR MENDOVA
   PANITIA09: "/images/peserta/PANITIA09.jpg", // IIN NOVIYANTI
+  PANITIA10: "/images/peserta/PANITIA10.jpg", // FADILA FITRIYANI
+  PANITIA11: "/images/peserta/PANITIA11.jpg", // FERI ANGGARA
+  PANITIA12: "/images/peserta/PANITIA12.jpg", // DEASY KUSUMA ANGGRAENY
+  PANITIA13: "/images/peserta/PANITIA13.jpg", // ADELLA DANNURA P.S
+  PANITIA14: "/images/peserta/PANITIA14.jpg", // ASTRI LINDA WOU MULEI
 };
 
 const PHOTO_BY_NAME: Record<string, string> = {
@@ -125,6 +130,11 @@ const PHOTO_BY_NAME: Record<string, string> = {
   "JOKO HERIYANTO": PHOTO_BY_NIK.PANITIA07!,
   "RIDHO AKBAR MENDOVA": PHOTO_BY_NIK.PANITIA08!,
   "IIN NOVIYANTI": PHOTO_BY_NIK.PANITIA09!,
+  "FADILA FITRIYANI": PHOTO_BY_NIK.PANITIA10!,
+  "FERI ANGGARA": PHOTO_BY_NIK.PANITIA11!,
+  "DEASY KUSUMA ANGGRAENY": PHOTO_BY_NIK.PANITIA12!,
+  "ADELLA DANNURA P S": PHOTO_BY_NIK.PANITIA13!,
+  "ASTRI LINDA WOU MULEI": PHOTO_BY_NIK.PANITIA14!,
 };
 
 function normalizeLookupName(raw?: string | null): string {

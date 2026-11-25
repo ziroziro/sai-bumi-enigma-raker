@@ -61,6 +61,16 @@ const DOORPRIZE_EXCEL_ROSTER: RawDoorprizeItem[] = [
   { name: "JOKO HERIYANTO", bucket: "b" },
   { name: "RIDHO AKBAR MENDOVA", bucket: "b" },
   { name: "IIN NOVIYANTI", bucket: "b" },
+  { name: "FADILA FITRIYANI", bucket: "b" },
+  { name: "M. DZIKRI ROFA", bucket: "b" },
+  { name: "DINA NABILA", bucket: "b" },
+  { name: "FERI ANGGARA", bucket: "b" },
+  { name: "M ANAM SAPUTRA", bucket: "b" },
+  { name: "MUHAMAD FARHAN RANDHIKA", bucket: "b" },
+  { name: "DEASY KUSUMA ANGGRAENY", bucket: "b" },
+  { name: "WIDIARTI EKA PUTRI", bucket: "b" },
+  { name: "ADELLA DANNURA P.S", bucket: "b" },
+  { name: "ASTRI LINDA WOU MULEI", bucket: "b" },
 ];
 
 export function buildDoorprizePool(): DoorprizeEntry[] {
