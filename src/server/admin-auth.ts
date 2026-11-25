@@ -1,7 +1,7 @@
 import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-const TOKEN_TTL_MS = 8 * 60 * 60 * 1000; // 8 jam
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 hari (tidak auto-logout selama acara)
 
 function getAdminPassword(): string {
   return (process.env.ADMIN_PASSWORD || "P@ssw0rd#adminEnigma2026").trim();

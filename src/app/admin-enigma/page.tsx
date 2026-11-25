@@ -28,11 +28,17 @@ import { Icon } from "@/components/icon";
 
 const ATTENDANCE_STORAGE_KEY = "sai_bumi_enigma_attendance_records";
 
+function getStoredAdminToken(): string {
+  if (typeof window === "undefined") return "";
+  return (
+    localStorage.getItem("admin_enigma_token") ||
+    sessionStorage.getItem("admin_enigma_token") ||
+    ""
+  );
+}
+
 function getAdminHeaders(): HeadersInit {
-  const token =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("admin_enigma_token") || ""
-      : "";
+  const token = getStoredAdminToken();
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -123,17 +129,16 @@ export default function AdminPage() {
   const [catalogGroup, setCatalogGroup] = useState<string>("ALL");
   const [catalogSearch, setCatalogSearch] = useState("");
 
-  // Autentikasi disimpan khusus per-device di sessionStorage dan WAJIB diverifikasi ke server sebelum membuka dashboard
+  // Autentikasi disimpan khusus per-device di localStorage (tetap login walau ganti tab/refresh, tidak auto-logout)
   useEffect(() => {
-    const localToken =
-      typeof window !== "undefined" ? sessionStorage.getItem("admin_enigma_token") : null;
+    const localToken = getStoredAdminToken();
     if (!localToken) {
       setIsAuthenticated(false);
       return;
     }
 
     const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
 
     async function verifyAndLoadAdminData() {
       try {
@@ -151,9 +156,13 @@ export default function AdminPage() {
               setAttendanceMovements(data.movements as RoomMovementLog[]);
             }
             setIsAuthenticated(true);
-          } else {
+          } else if (res.status === 401) {
+            localStorage.removeItem("admin_enigma_token");
             sessionStorage.removeItem("admin_enigma_token");
             setIsAuthenticated(false);
+          } else {
+            // Jangan auto-logout saat error jaringan/server sementara (500/503)
+            setIsAuthenticated(true);
           }
           return;
         }
@@ -180,14 +189,20 @@ export default function AdminPage() {
           void fetchAttendance();
           void fetchDeptHead();
           void fetchStageSnapshot();
-        } else {
+        } else if (res.status === 401) {
+          localStorage.removeItem("admin_enigma_token");
           sessionStorage.removeItem("admin_enigma_token");
           setIsAuthenticated(false);
+        } else {
+          setIsAuthenticated(true);
+          void fetchAttendance();
+          void fetchDeptHead();
+          void fetchStageSnapshot();
         }
       } catch {
         window.clearTimeout(timeoutId);
-        sessionStorage.removeItem("admin_enigma_token");
-        setIsAuthenticated(false);
+        // Jangan auto-logout hanya karena koneksi lambat / timeout
+        setIsAuthenticated(true);
       }
     }
     void verifyAndLoadAdminData();
@@ -413,6 +428,7 @@ export default function AdminPage() {
       if (res.ok) {
         const data = await res.json();
         if (typeof window !== "undefined" && data.token) {
+          localStorage.setItem("admin_enigma_token", data.token);
           sessionStorage.setItem("admin_enigma_token", data.token);
         }
         setIsAuthenticated(true);
@@ -439,6 +455,7 @@ export default function AdminPage() {
   function handleLogout() {
     document.cookie = "admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
     if (typeof window !== "undefined") {
+      localStorage.removeItem("admin_enigma_token");
       sessionStorage.removeItem("admin_enigma_token");
     }
     setIsAuthenticated(false);
